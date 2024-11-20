@@ -1,0 +1,12 @@
+{
+  "category.refueled": "Attempt Mod",
+
+  "key.refueled_car_gui": "Open Vehicle GUI",
+  "key.refueled_car_start": "Start Vehicle",
+  "key.refueled_center_car": "Center Vehicle",
+  "key.refueled_horn": "Blow Vehicle Horn",
+
+  "gui.refueled_car_health": "%s%% Health",
+
+  "death.attack.refueled.hit_by_car": "%s was run over by a car"
+}

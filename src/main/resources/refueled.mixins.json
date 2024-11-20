@@ -1,0 +1,29 @@
+{
+  "required": true,
+  "priority": 1000,
+  "package": "bogdan.refueled.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "refueled.mixins.refmap.json",
+  "minVersion": "0.8",
+  "mixins": [
+    "accessor.IBiomeTempInvoke",
+    "accessor.IDmgSourceInvoke",
+    "accessor.IHeightAccess",
+    "car.CarHitboxMixin",
+    "car.CarSpawnMixin",
+    "car.CarMixin",
+    "car.CarMixin$ModernMixin",
+    "car.CarMixin$ClassicMixin",
+    "car.CarMixin$TruckMixin",
+    "car.CarMixin$SUVMixin",
+    "car.CarMixin$SportMixin",
+    "car.CarMixin$BikeMixin"
+  ],
+  "client": [
+    "accessor.ICameraInvoke",
+    "car.client.AnimationMixin",
+    "car.client.CarClientMixin",
+    "car.client.CarModelMixin",
+    "car.client.CarRenderMixin"
+  ]
+}

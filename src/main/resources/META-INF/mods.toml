@@ -1,0 +1,39 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="refueled"
+version="1.20.1-1.4.3"
+displayName="DragN's VV: Refueled"
+credits="henkelmax and DragN0007"
+authors="Bogdan_Off"
+
+description='''A mod combining the features of the Ultimate Car Mod with DragN's Valiant Vehicles'''
+[[dependencies.refueled]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.refueled]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="1.20.1"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.refueled]]
+    modId="dragnvehicles"
+    mandatory=true
+    versionRange="[1.3,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.refueled]]
+    modId="car"
+    mandatory=false
+    versionRange="[1.0.32,)"
+    ordering="AFTER"
+    side="BOTH"
