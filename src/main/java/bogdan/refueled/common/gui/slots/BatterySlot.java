@@ -1,7 +1,6 @@
 package bogdan.refueled.common.gui.slots;
 
 import bogdan.refueled.common.accessors.ICarInvoker;
-import bogdan.refueled.config.ServerConfig;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;

@@ -2,8 +2,6 @@ package bogdan.refueled.common.gui.slots;
 
 import bogdan.refueled.common.accessors.ICarInvoker;
 import bogdan.refueled.config.ServerConfig;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Containers;
