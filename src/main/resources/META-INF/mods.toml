@@ -4,12 +4,11 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="refueled"
-version="1.20.1-1.4.3"
+version="1.20.1-1.6.0"
 displayName="DragN's VV: Refueled"
-credits="henkelmax and DragN0007"
 authors="Bogdan_Off"
 
-description='''A mod combining the features of the Ultimate Car Mod with DragN's Valiant Vehicles'''
+description='''A mod adding a way to fuel DragN's Valiant Vehicles'''
 [[dependencies.refueled]]
     modId="forge"
     mandatory=true
@@ -29,11 +28,4 @@ description='''A mod combining the features of the Ultimate Car Mod with DragN's
     mandatory=true
     versionRange="[1.3,)"
     ordering="NONE"
-    side="BOTH"
-
-[[dependencies.refueled]]
-    modId="car"
-    mandatory=false
-    versionRange="[1.0.32,)"
-    ordering="AFTER"
     side="BOTH"

@@ -9,6 +9,7 @@
     "accessor.IBiomeTempInvoke",
     "accessor.IDmgSourceInvoke",
     "accessor.IHeightAccess",
+    "accessor.IEntityAccess",
     "car.CarHitboxMixin",
     "car.CarSpawnMixin",
     "car.CarMixin",

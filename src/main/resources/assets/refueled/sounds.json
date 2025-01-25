@@ -1,0 +1,20 @@
+{
+  "engine": {
+    "subtitle": "sound.refueled.engine",
+    "sounds": [
+      "refueled:engine"
+    ]
+  },
+  "sport_engine": {
+    "subtitle": "sound.refueled.engine",
+    "sounds": [
+      "refueled:sport_engine"
+    ]
+  },
+  "truck_engine": {
+    "subtitle": "sound.refueled.engine",
+    "sounds": [
+      "refueled:truck_engine"
+    ]
+  }
+}

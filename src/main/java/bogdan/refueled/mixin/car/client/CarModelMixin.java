@@ -18,39 +18,39 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class CarModelMixin {
 
     @Redirect(
-        method = {"prepareMobModel*", "setupAnim*"},
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/dragn0007/dragnvehicles/Animation;animate(Lnet/minecraft/client/model/geom/ModelPart;Lcom/dragn0007/dragnvehicles/Animation;FFF)V",
-            ordinal = 0
-        ),
-        remap = false
+            remap = false,
+            method = {"prepareMobModel*", "setupAnim*"},
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/dragn0007/dragnvehicles/Animation;animate(Lnet/minecraft/client/model/geom/ModelPart;Lcom/dragn0007/dragnvehicles/Animation;FFF)V",
+                    ordinal = 0
+            )
     )
     private void refueled$nullifyBodyAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3){
         // Gone.
     }
 
     @Redirect(
-        method = {"prepareMobModel*", "setupAnim*"},
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/dragn0007/dragnvehicles/Animation;animate(Lnet/minecraft/client/model/geom/ModelPart;Lcom/dragn0007/dragnvehicles/Animation;FFF)V",
-            ordinal = 1
-        ),
-        remap = false
+            remap = false,
+            method = {"prepareMobModel*", "setupAnim*"},
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/dragn0007/dragnvehicles/Animation;animate(Lnet/minecraft/client/model/geom/ModelPart;Lcom/dragn0007/dragnvehicles/Animation;FFF)V",
+                    ordinal = 1
+            )
     )
     private void refueled$redirectFrontAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3, @Coerce Object car, float partialTick){
         ((ICarInvoker) (Object) animation).car$animate(modelPart, animation, ((ICarInvoker) car).car$getWheelRotation(partialTick));
     }
 
     @Redirect(
+            remap = false,
             method = {"prepareMobModel*", "setupAnim*"},
             at = @At(
                     value = "INVOKE",
                     target = "Lcom/dragn0007/dragnvehicles/Animation;animate(Lnet/minecraft/client/model/geom/ModelPart;Lcom/dragn0007/dragnvehicles/Animation;FFF)V",
                     ordinal = 2
-            ),
-            remap = false
+            )
     )
     private void refueled$redirectBackAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3, @Coerce Object car, float partialTick){
         ((ICarInvoker) (Object) animation).car$animate(modelPart, animation, ((ICarInvoker) car).car$getWheelRotation(partialTick));

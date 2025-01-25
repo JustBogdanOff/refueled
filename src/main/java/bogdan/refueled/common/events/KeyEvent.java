@@ -21,10 +21,6 @@ import static bogdan.refueled.Utils.isCar;
 public class KeyEvent {
     private boolean wasStartPressed, wasGuiPressed, wasCenterPressed;
 
-    public KeyEvent() {
-
-    }
-
     @SubscribeEvent
     public void onKeyInput(InputEvent.Key event) {
         Minecraft minecraft = Minecraft.getInstance();
@@ -53,7 +49,7 @@ public class KeyEvent {
             if (RefueledMain.CENTER_KEY.isDown()) {
                 if (!wasCenterPressed) {
                     RefueledChannel.sendToServer(new CenterVehicle(player));
-                    player.displayClientMessage(Component.translatable("message.center_car"), true);
+                    player.displayClientMessage(Component.translatable("message.center_vehicle"), true);
                     wasCenterPressed = true;
                 }
             } else {

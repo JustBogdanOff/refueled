@@ -2,6 +2,7 @@ package bogdan.refueled.common.events;
 
 import bogdan.refueled.config.ClientConfig;
 import bogdan.refueled.mixin.accessor.ICameraInvoke;
+import com.dragn0007.dragnvehicles.vehicle.motorcycle.Motorcycle;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
@@ -53,8 +54,14 @@ public class RenderEvent {
     public void renderPlayerPre(RenderPlayerEvent.Pre event) {
         if (event.getEntity().getVehicle() != null) {
             if(isCar(event.getEntity().getVehicle())) {
+                if(event.getEntity().getVehicle() instanceof Motorcycle){
+                    event.getPoseStack().pushPose();
+                    event.getPoseStack().scale(0.8f, 0.8f, 0.8f);
+                    return;
+                }
+
                 event.getPoseStack().pushPose();
-                event.getPoseStack().scale(0.8f, 0.8f, 0.8f);
+                event.getPoseStack().scale(0.6f, 0.6f, 0.6f);
             }
         }
     }

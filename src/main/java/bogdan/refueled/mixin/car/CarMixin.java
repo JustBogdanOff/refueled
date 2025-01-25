@@ -1,8 +1,8 @@
 package bogdan.refueled.mixin.car;
 
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.network.*;
-import bogdan.refueled.common.sounds.RefueledSounds;
 import bogdan.refueled.common.sounds.RefueledHigh;
 import bogdan.refueled.common.sounds.RefueledIdle;
 import bogdan.refueled.common.sounds.RefueledStart;
@@ -12,6 +12,7 @@ import bogdan.refueled.common.gui.CarGUI;
 import bogdan.refueled.config.ServerConfig;
 import bogdan.refueled.mixin.accessor.IBiomeTempInvoke;
 import bogdan.refueled.mixin.accessor.IDmgSourceInvoke;
+import bogdan.refueled.mixin.accessor.IEntityAccess;
 import bogdan.refueled.mixin.accessor.IHeightAccess;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
 import com.dragn0007.dragnvehicles.vehicle.classic.Classic;
@@ -19,8 +20,7 @@ import com.dragn0007.dragnvehicles.vehicle.motorcycle.Motorcycle;
 import com.dragn0007.dragnvehicles.vehicle.sportcar.SportCar;
 import com.dragn0007.dragnvehicles.vehicle.suv.SUV;
 import com.dragn0007.dragnvehicles.vehicle.truck.Truck;
-import de.maxhenkel.car.fluids.ModFluids;
-import de.maxhenkel.car.items.ItemCanister;
+import com.google.common.collect.ImmutableList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleOptions;
@@ -49,13 +49,18 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.event.ForgeEventFactory;
+import net.minecraftforge.event.entity.EntityEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.network.NetworkHooks;
@@ -88,9 +93,20 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         int i = this.getPassengers().indexOf(entity);
         entity.setPos(this.calcOffset(car$getSeatPositions()[i].x, car$getSeatPositions()[i].y, car$getSeatPositions()[i].z));
 
-        entity.setBoundingBox(AABB.ofSize(entity.getBoundingBox().getCenter(), entity.getBoundingBox().getXsize() * 0.8, entity.getEyeHeight(Pose.SITTING) * 0.8, entity.getBoundingBox().getZsize() * 0.8));
-        ((IHeightAccess) entity).setEyeHeight(entity.getEyeHeight(Pose.SITTING) * 0.8f);
+        float sizeMod = 0.6f;
+        if((Entity) this instanceof Motorcycle){
+            sizeMod = 0.8f;
+        }
 
+        entity.setBoundingBox(
+                AABB.ofSize(
+                        entity.getBoundingBox().getCenter(),
+                        entity.getDimensions(Pose.SITTING).width * sizeMod,
+                        entity.getDimensions(Pose.SITTING).height * sizeMod * 0.7, // 30% of bounding box is legs
+                        entity.getDimensions(Pose.SITTING).width * sizeMod
+                ).move(0, entity.getDimensions(Pose.SITTING).height * sizeMod * ((Entity) this instanceof Motorcycle ? 0.085 : -0.115), 0)
+        );
+        ((IHeightAccess) entity).setEyeHeight(entity.getEyeHeight(Pose.SITTING) * sizeMod);
 
         entity.setYRot(entity.getYRot() + car$deltaRotation);
         entity.setYHeadRot(entity.getYHeadRot() + this.car$deltaRotation);
@@ -123,7 +139,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             at = @At("TAIL")
     )
     private void car$addInit(EntityType<?> entityType, Level level, CallbackInfo ci) {
-        this.car$internalInventory = new SimpleContainer(27);
+        this.car$internalInventory = new SimpleContainer(24);
         this.car$fluidInventory = FluidStack.EMPTY;
     }
 
@@ -180,12 +196,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         if (compoundTag.contains("fluid_inventory")) {
             car$fluidInventory = FluidStack.EMPTY;
         }
-
-        if (compoundTag.getAllKeys().stream().allMatch(s -> s.equals("id"))) {
-            car$setFuel(100);
-            car$setBattery(500);
-            car$initTemperature();
-        }
     }
 
     @Inject(
@@ -209,13 +219,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
     @SuppressWarnings("unchecked")
     @Inject(
+            remap = false,
             method = "getCapability",
             at = @At(
                     value = "RETURN",
                     ordinal = 1
             ),
-            cancellable = true,
-            remap = false
+            cancellable = true
     )
     private <T> void car$addFluidCapability(@NotNull Capability<T> cap, @Nullable Direction side, CallbackInfoReturnable<LazyOptional<T>> cir) {
         if (this.isAlive() && cap == ForgeCapabilities.FLUID_HANDLER) {
@@ -262,7 +272,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
     @Unique
     public void car$addDamage(float damage) {
-        car$setHealth(car$getHealth() - damage);
+        this.hurt(damageSources().generic(), damage);
     }
 
 
@@ -294,11 +304,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     @Unique
     public void car$setFuelType(Fluid fluid) {
         car$setFuelType(ForgeRegistries.FLUIDS.getKey(fluid).toString());
-    }
-
-    @Unique
-    public int car$getMaxFuel() {
-        return 1000;
     }
 
 
@@ -359,7 +364,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     public FluidStack getFluidInTank(int tank) {
         Fluid fluid = car$getFluid();
         if (fluid == null) {
-            return new FluidStack(ModFluids.BIO_DIESEL.get(), car$getFuel());
+            return new FluidStack(Fluids.LAVA, car$getFuel());
         } else {
             return new FluidStack(fluid, car$getFuel());
         }
@@ -397,26 +402,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         return amount;
-    }
-
-    @Inject(
-            method = "interact",
-            at = @At("HEAD"),
-            cancellable = true
-    )
-    private void car$gasSiphon(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir){
-        if(player.isShiftKeyDown()) {
-            if (!player.getItemInHand(hand).isEmpty()) {
-                if (player.getItemInHand(hand).getItem() instanceof ItemCanister) {
-                    boolean success = ItemCanister.fillCanister(player.getItemInHand(hand), this);
-
-                    if (success) {
-                        RefueledSounds.playSound(SoundEvents.BREWING_STAND_BREW, level(), blockPosition(), null, SoundSource.BLOCKS);
-                    }
-                    cir.setReturnValue(InteractionResult.CONSUME);
-                }
-            }
-        }
     }
 
     @Nonnull
@@ -603,16 +588,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             car$playFailSound();
         }
         this.entityData.set(car$STARTED, started);
-    }
-
-    @Unique
-    public void car$playStopSound() {
-        RefueledSounds.playSound(car$getStopSound(), level(), blockPosition(), null, SoundSource.MASTER, 1F);
-    }
-
-    @Unique
-    public void car$playFailSound() {
-        RefueledSounds.playSound(car$getFailSound(), level(), blockPosition(), null, SoundSource.MASTER, 1F, car$getBatterySoundPitchLevel());
     }
 
     @Unique
@@ -813,14 +788,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         car$startedLast = car$isStarted();
     }
 
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$checkStartingLoop() {
-        if (!car$isSoundPlaying(car$startingLoop)) {
-            car$startingLoop = new RefueledStarting(this, car$getStartingSound(), SoundSource.MASTER);
-            RefueledSounds.playSoundLoop(car$startingLoop, level());
-        }
-    }
 
     @Unique
     private RefueledStart car$startLoop;
@@ -838,8 +805,8 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     @Unique
     public void car$checkIdleLoop() {
         if (!car$isSoundPlaying(car$idleLoop)) {
-            car$idleLoop = new RefueledIdle(this, car$getIdleSound(), SoundSource.MASTER);
-            RefueledSounds.playSoundLoop(car$idleLoop, level());
+            car$idleLoop = new RefueledIdle(this, car$getEngineSound(), SoundSource.MASTER);
+            car$playSoundLoop(car$idleLoop, level());
         }
     }
 
@@ -847,8 +814,8 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     @Unique
     public void car$checkHighLoop() {
         if (!car$isSoundPlaying(car$highLoop)) {
-            car$highLoop = new RefueledHigh(this, car$getHighSound(), SoundSource.MASTER);
-            RefueledSounds.playSoundLoop(car$highLoop, level());
+            car$highLoop = new RefueledHigh(this, car$getEngineSound(), SoundSource.MASTER);
+            car$playSoundLoop(car$highLoop, level());
         }
     }
 
@@ -856,14 +823,66 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     @Unique
     public void car$checkStartLoop() {
         if (!car$isSoundPlaying(car$startLoop)) {
-            car$startLoop = new RefueledStart(this, car$getStartSound(), SoundSource.MASTER);
-            RefueledSounds.playSoundLoop(car$startLoop, level());
+            car$startLoop = new RefueledStart(this, SoundEvents.FIRECHARGE_USE, SoundSource.MASTER);
+            car$playSoundLoop(car$startLoop, level());
+        }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    @Unique
+    public void car$checkStartingLoop() {
+        if (!car$isSoundPlaying(car$startingLoop)) {
+            car$startingLoop = new RefueledStarting(this, SoundEvents.TNT_PRIMED, SoundSource.MASTER);
+            car$playSoundLoop(car$startingLoop, level());
         }
     }
 
     @Unique
-    public SoundEvent car$getCrashSound() {
-        return RefueledSounds.CAR_CRASH.get();
+    public void car$playStopSound() {
+        if(!(level().isClientSide)) {
+            level().playSound(
+                    null,
+                    blockPosition().getX() + 0.5d,
+                    blockPosition().getY() + 0.5d,
+                    blockPosition().getZ() + 0.5d,
+                        SoundEvents.CHAIN_HIT,
+                        SoundSource.MASTER,
+                    1f,
+                    0f
+            );
+        }
+    }
+
+
+    @Unique
+    public void car$playFailSound() {
+        if(!(level().isClientSide)) {
+            level().playSound(
+                    null,
+                    blockPosition().getX() + 0.5d,
+                    blockPosition().getY() + 0.5d,
+                    blockPosition().getZ() + 0.5d,
+                        SoundEvents.FIRE_EXTINGUISH,
+                        SoundSource.MASTER,
+                1f,
+                        1f + car$getBatterySoundPitchLevel()
+            );
+        }
+    }
+
+    @Unique
+    public void car$playCrashSound() {
+        if(!level().isClientSide) {
+            level().playSound(
+                    null,
+                    (double) blockPosition().getX() + 0.5D,
+                    (double) blockPosition().getY() + 0.5D,
+                    (double) blockPosition().getZ() + 0.5D,
+                    SoundEvents.ANVIL_LAND,
+                    SoundSource.MASTER,
+                    1f,
+                    1f);
+        }
     }
 
     @Shadow(remap = false)
@@ -918,11 +937,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
                 if (tickCount % 2 == 0) { //How often particles will spawn
                     car$spawnParticles(car$getSpeed() > 0.1F);
                     car$spawnParticles(car$getSpeed() > 0.1F);
-                    if((Entity) this instanceof Motorcycle){
-                        car$spawnParticles(car$getSpeed() > 0.1F);
-                        car$spawnParticles(car$getSpeed() > 0.1F);
-                    }
-                    if((Entity) this instanceof SportCar){
+                    if((Entity) this instanceof Motorcycle || (Entity) this instanceof SportCar){
                         car$spawnParticles(car$getSpeed() > 0.1F);
                         car$spawnParticles(car$getSpeed() > 0.1F);
                     }
@@ -1023,11 +1038,12 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         float percSpeed = speed / car$getMaxSpeed();
 
-        if (percSpeed > 0.8F) {
+        if (percSpeed > 0.7F) {
             car$addDamage(percSpeed * 5);
             car$playCrashSound();
 
             if (percSpeed > 0.9F) {
+                car$addDamage(percSpeed * 5);
                 car$setStarted(false);
                 car$playStopSound();
             }
@@ -1041,10 +1057,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         car$setStarted(started, true, false);
     }
 
-    @Unique
-    public void car$playCrashSound() {
-        RefueledSounds.playSound(car$getCrashSound(), level(), blockPosition(), null, SoundSource.MASTER, 1F);
-    }
 
     @Unique
     public float car$getRotationModifier() {
@@ -1209,7 +1221,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
                 }
             }
         }
-        ((IHeightAccess) entity).setEyeHeight(getEyeHeight(Pose.STANDING));
         return super.getDismountLocationForPassenger(entity);
     }
 
@@ -1227,28 +1238,21 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             return false;
         }
 
-        if (!(damageSource.getEntity() instanceof Player)) {
-            return false;
-        }
-        Player player = (Player) damageSource.getEntity();
-
-        if (player == null) {
-            return false;
-        }
-
-        if (getPassengers().stream().anyMatch(player::equals)) {
-            return false;
+        if (damageSource.getEntity() instanceof Player player) {
+            if (getPassengers().stream().anyMatch(player::equals)) {
+                return false;
+            }
         }
 
         if (!this.level().isClientSide && !this.isRemoved()) {
             this.markHurt();
             this.gameEvent(GameEvent.ENTITY_DAMAGE);
-            float health = this.entityData.get(HEALTH) - damage;
-            this.entityData.set(HEALTH, health);
+            float health = car$getHealth() - damage;
+            car$setHealth(health);
 
             if (health < 0) {
                 if(ServerConfig.explodeOnDeath.get()) {
-                    level().explode(null, getX(), getY(), getZ(), 2f + 4f * ((float) car$getFuel() / (float) car$getMaxFuel()), Level.ExplosionInteraction.BLOCK);
+                    level().explode(this, new DamageSource(((IDmgSourceInvoke) level().damageSources()).invokeSource(RefueledRegistry.vehicleExplosion).typeHolder(), getControllingPassenger()), null, getX(), getY(), getZ(), 2f + 4f * ((float) car$getFuel() / (float) car$getMaxFuel()), false, Level.ExplosionInteraction.BLOCK);
                 }
                 Containers.dropContents(this.level(), this, this.inventory);
                 Containers.dropContents(this.level(), this, car$internalInventory);
@@ -1291,9 +1295,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
                 if (altSpeed > 0.35F) {
                     float damage = altSpeed * car$getRamDamage();
-                    car$tasks.add(() -> {
-                        entity.hurt(((IDmgSourceInvoke) level().damageSources()).invokeSource(RefueledRegistry.CAR_DAMAGE_TYPE), damage);
-                    });
+                    car$tasks.add(() -> entity.hurt(((IDmgSourceInvoke) level().damageSources()).invokeSource(RefueledRegistry.vehicleCollision), damage));
                 }
             }
         }
@@ -1329,6 +1331,17 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             setPos(d0, d1, d2);
             setRot(getYRot(), getXRot());
         }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    @Override
+    public void lerpTo(double x, double y, double z, float yaw, float pitch, int posRotationIncrements, boolean teleport) {
+        this.targetX = x;
+        this.targetY = y;
+        this.targetZ = z;
+        this.targetYRot = yaw;
+        this.car$clientPitch = pitch;
+        this.lerpSteps = 10;
     }
 
     @Unique
@@ -1460,11 +1473,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
     @Unique
     public float car$wheelRotation;
-
-    @Unique
-    public float car$getWheelRotationAmount() {
-        return ((25.5f / 2f) * 0.8f) * car$getSpeed(); // 25.5 is the wheel height, 0.8 is scale factor
-    }
 
     @Unique
     public void car$updateWheelRotation() {
@@ -1652,10 +1660,10 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+                remap = false,
+                method = "getStepHeight",
+                at = @At("RETURN"),
+                cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.modernStepHeight.get().floatValue());
@@ -1689,10 +1697,10 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+                remap = false,
+                method = "getStepHeight",
+                at = @At("RETURN"),
+                cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.classicStepHeight.get().floatValue());
@@ -1700,6 +1708,10 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         public float car$getRamDamage(){
             return ServerConfig.classicRamDamage.get().floatValue();
+        }
+
+        public int car$getMaxFuel() {
+            return ServerConfig.classicMaxFuel.get();
         }
     }
 
@@ -1730,41 +1742,21 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+                remap = false,
+                method = "getStepHeight",
+                at = @At("RETURN"),
+                cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.truckStepHeight.get().floatValue());
         }
 
         public float car$getPitch() {
-            return 1f + 0.35f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
+            return 1f + 0.34f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
         }
 
-        public SoundEvent car$getStopSound() {
-            return RefueledSounds.TRUCK_ENGINE_STOP.get();
-        }
-
-        public SoundEvent car$getFailSound() {
-            return RefueledSounds.TRUCK_ENGINE_FAIL.get();
-        }
-
-        public SoundEvent car$getStartSound() {
-            return RefueledSounds.TRUCK_ENGINE_START.get();
-        }
-
-        public SoundEvent car$getStartingSound() {
-            return RefueledSounds.TRUCK_ENGINE_STARTING.get();
-        }
-
-        public SoundEvent car$getIdleSound() {
-            return RefueledSounds.TRUCK_ENGINE_IDLE.get();
-        }
-
-        public SoundEvent car$getHighSound() {
-            return RefueledSounds.TRUCK_ENGINE_HIGH.get();
+        public SoundEvent car$getEngineSound(){
+            return RefueledRegistry.TRUCK_ENGINE.get();
         }
 
         public float car$getRamDamage(){
@@ -1773,6 +1765,14 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         public float car$getMaxHealth(){
             return 125f;
+        }
+
+        public float car$getMinRotationSpeed(){
+            return ServerConfig.truckMaxRotation.get().floatValue();
+        }
+
+        public int car$getMaxFuel() {
+            return ServerConfig.truckMaxFuel.get();
         }
     }
 
@@ -1803,41 +1803,21 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+                remap = false,
+                method = "getStepHeight",
+                at = @At("RETURN"),
+                cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.suvStepHeight.get().floatValue());
         }
 
         public float car$getPitch() {
-            return 1f + 0.35f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
+            return 1f + 0.34f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
         }
 
-        public SoundEvent car$getStopSound() {
-            return RefueledSounds.TRUCK_ENGINE_STOP.get();
-        }
-
-        public SoundEvent car$getFailSound() {
-            return RefueledSounds.TRUCK_ENGINE_FAIL.get();
-        }
-
-        public SoundEvent car$getStartSound() {
-            return RefueledSounds.TRUCK_ENGINE_START.get();
-        }
-
-        public SoundEvent car$getStartingSound() {
-            return RefueledSounds.TRUCK_ENGINE_STARTING.get();
-        }
-
-        public SoundEvent car$getIdleSound() {
-            return RefueledSounds.TRUCK_ENGINE_IDLE.get();
-        }
-
-        public SoundEvent car$getHighSound() {
-            return RefueledSounds.TRUCK_ENGINE_HIGH.get();
+        public SoundEvent car$getEngineSound(){
+            return RefueledRegistry.TRUCK_ENGINE.get();
         }
 
         public float car$getRamDamage(){
@@ -1846,6 +1826,14 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         public float car$getMaxHealth(){
             return 125f;
+        }
+
+        public float car$getMinRotationSpeed(){
+            return ServerConfig.suvMaxRotation.get().floatValue();
+        }
+
+        public int car$getMaxFuel() {
+            return ServerConfig.suvMaxFuel.get();
         }
     }
 
@@ -1876,10 +1864,10 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+                remap = false,
+                method = "getStepHeight",
+                at = @At("RETURN"),
+                cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.sportStepHeight.get().floatValue());
@@ -1888,36 +1876,12 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         public Vec3[] car$getSeatPositions(){
             Vec3[] seatPos = new Vec3[4];
 
-            seatPos[0] = new Vec3(0.6 * 0.9, 0.1 * 0.8, -0.2 * 0.9);
-            seatPos[1] = new Vec3(-0.6 * 0.9, 0.1 * 0.8, -0.2 * 0.9);
-            seatPos[2] = new Vec3(0.6 * 0.9, 0.1 * 0.8, -2.0 * 0.9);
-            seatPos[3] = new Vec3(-0.6 * 0.9, 0.1 * 0.8, -2.0 * 0.9);
+            seatPos[0] = new Vec3(0.6 * 0.7, 0.1 * 0.6 - 0.125, -0.2 * 0.4);
+            seatPos[1] = new Vec3(-0.6 * 0.7, 0.1 * 0.6 - 0.125, -0.2 * 0.4);
+            seatPos[2] = new Vec3(0.6 * 0.7, 0.1 * 0.6 - 0.125, -2.0 * 0.4);
+            seatPos[3] = new Vec3(-0.6 * 0.7, 0.1 * 0.6 - 0.125, -2.0 * 0.4);
 
             return seatPos;
-        }
-
-        public SoundEvent car$getStopSound() {
-            return RefueledSounds.SPORT_ENGINE_STOP.get();
-        }
-
-        public SoundEvent car$getFailSound() {
-            return RefueledSounds.SPORT_ENGINE_FAIL.get();
-        }
-
-        public SoundEvent car$getStartSound() {
-            return RefueledSounds.SPORT_ENGINE_START.get();
-        }
-
-        public SoundEvent car$getStartingSound() {
-            return RefueledSounds.SPORT_ENGINE_STARTING.get();
-        }
-
-        public SoundEvent car$getIdleSound() {
-            return RefueledSounds.SPORT_ENGINE_IDLE.get();
-        }
-
-        public SoundEvent car$getHighSound() {
-            return RefueledSounds.SPORT_ENGINE_HIGH.get();
         }
 
         public float car$getRamDamage(){
@@ -1930,11 +1894,23 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         public double[] car$getExhaust(int rand){
             double[] modX = new double[]{1D, -1D, 1D, -1D};
-            double radius = Math.sqrt((2.65D - 1D) * (2.65D - 1D) + (0.8D - 0) * (0.8D - 0));                             // calculates distance from entity center to exhaust point
-            double pointDist = Math.sqrt((2.65D - (1D + radius)) * (2.65D - (1D + radius)) + (0.8D - 0) * (0.8D - 0));    // calculates distance from exhaust point to current entity viewing point
+            double radius = Math.sqrt((2.1D - 1D) * (2.1D - 1D) + (0.6D - 0) * (0.6D - 0));                             // calculates distance from entity center to exhaust point
+            double pointDist = Math.sqrt((2.1D - (1D + radius)) * (2.1D - (1D + radius)) + (0.6D - 0) * (0.6D - 0));    // calculates distance from exhaust point to current entity viewing point
             double angle = 2 * Math.asin(0.5 * pointDist / radius) * modX[rand];
 
             return new double[]{radius, angle, 0.05D};
+        }
+
+        public float car$getMinRotationSpeed(){
+            return ServerConfig.sportMaxRotation.get().floatValue();
+        }
+
+        public SoundEvent car$getEngineSound(){
+            return RefueledRegistry.SPORT_ENGINE.get();
+        }
+
+        public int car$getMaxFuel() {
+            return ServerConfig.sportMaxFuel.get();
         }
     }
 
@@ -1968,10 +1944,10 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         @Inject(
+            remap = false,
             method = "getStepHeight",
             at = @At("RETURN"),
-            cancellable = true,
-            remap = false
+            cancellable = true
         )
         private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
             cir.setReturnValue(ServerConfig.bikeStepHeight.get().floatValue());
@@ -1980,11 +1956,11 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         @Override
         public double[] car$getExhaust(int rand){
             double[] modX = new double[]{1d, -1d, 1d, -1d};
-            double[] randomOffY = new double[]{0.7d, 0.7d, 0.7D - 0.275D, 0.7D - 0.275D};
-            double[] modY = new double[]{1.5d, 1.5d, 1.5D - 0.225D, 1.5D - 0.225D};
+            double[] randomOffY = new double[]{0.5d, 0.5d, 0.525D - 0.2D, 0.525D - 0.2D};
+            double[] modY = new double[]{1.125d, 1.125d, 1.125D - 0.15D, 1.125D - 0.15D};
 
-            double radius = Math.sqrt((modY[rand] - 1D) * (modY[rand] - 1D) + (0.3D - 0) * (0.3D - 0));
-            double pointDist = Math.sqrt((modY[rand] - (1D + radius)) * (modY[rand] - (1D + radius)) + (0.3D - 0) * (0.3D - 0));
+            double radius = Math.sqrt((modY[rand] - 1D) * (modY[rand] - 1D) + (0.2D - 0) * (0.2D - 0));
+            double pointDist = Math.sqrt((modY[rand] - (1D + radius)) * (modY[rand] - (1D + radius)) + (0.2D - 0) * (0.2D - 0));
             double angle = (2 * Math.asin(0.5 * pointDist / radius)) * modX[rand];
 
             return new double[]{radius, angle, randomOffY[rand]};
@@ -1993,7 +1969,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         public Vec3[] car$getSeatPositions(){
             Vec3[] seatPos = new Vec3[1];
 
-            seatPos[0] = new Vec3(0 * 0.8, 0.8 * 0.7, -0.5 * 0.8);
+            seatPos[0] = new Vec3(0 * 0.6, 0.8 * 0.4, -0.5 * 0.6);
 
             return seatPos;
         }
@@ -2006,9 +1982,37 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             return 5f;
         }
 
+        public float car$getMinRotationSpeed(){
+            return ServerConfig.bikeMaxRotation.get().floatValue();
+        }
+
         public float car$getMaxHealth(){
             return 60f;
         }
+
+        public SoundEvent car$getEngineSound(){
+            return RefueledRegistry.SPORT_ENGINE.get();
+        }
+
+        public int car$getMaxFuel() {
+            return ServerConfig.bikeMaxFuel.get();
+        }
     }
 
+    @Override
+    protected void removePassenger(Entity pPassenger) {
+        if (pPassenger.getVehicle() == this) {
+            throw new IllegalStateException("Use x.stopRiding(y), not y.removePassenger(x)");
+        } else {
+            if (((IEntityAccess) this).getPassengers().size() == 1 && ((IEntityAccess) this).getPassengers().get(0) == pPassenger) {
+                ((IEntityAccess) this).setPassengers(ImmutableList.of());
+            } else {
+                ((IEntityAccess) this).setPassengers(((IEntityAccess) this).getPassengers().stream().filter((p_185980_) -> p_185980_ != pPassenger).collect(ImmutableList.toImmutableList()));
+            }
+
+            ((IEntityAccess) pPassenger).setBoardingCooldown(60);
+            pPassenger.refreshDimensions();
+            this.gameEvent(GameEvent.ENTITY_DISMOUNT, pPassenger);
+        }
+    }
 }

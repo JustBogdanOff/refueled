@@ -1,6 +1,7 @@
 package bogdan.refueled.common.sounds;
 
 import bogdan.refueled.config.ClientConfig;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -44,7 +45,7 @@ public abstract class RefueledLoop extends AbstractTickableSoundInstance {
             return;
         }
 
-        LocalPlayer player = net.minecraft.client.Minecraft.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
         if (player == null || !player.isAlive()) {
             setDonePlaying();
             return;

@@ -4,7 +4,6 @@ import bogdan.refueled.client.gui.CarGUIScreen;
 import bogdan.refueled.common.events.KeyEvent;
 import bogdan.refueled.common.events.RenderEvent;
 import bogdan.refueled.common.network.RefueledChannel;
-import bogdan.refueled.common.sounds.RefueledSounds;
 import bogdan.refueled.config.ClientConfig;
 import bogdan.refueled.config.ServerConfig;
 import com.mojang.logging.LogUtils;
@@ -39,8 +38,6 @@ public class RefueledMain {
             modEventBus.addListener(this::onRegisterKeybinds);
             modEventBus.addListener(this::clientSetup);
         });
-
-        RefueledSounds.init(modEventBus);
 
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);

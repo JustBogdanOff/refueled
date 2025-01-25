@@ -1,12 +1,22 @@
 {
-  "category.refueled": "Attempt Mod",
+  "category.refueled": "Refueled Vehicles",
 
   "key.refueled_car_gui": "Open Vehicle GUI",
   "key.refueled_car_start": "Start Vehicle",
   "key.refueled_center_car": "Center Vehicle",
-  "key.refueled_horn": "Blow Vehicle Horn",
 
-  "gui.refueled_car_health": "%s%% Health",
+  "message.center_vehicle": "Vehicle Centered",
 
-  "death.attack.refueled.hit_by_car": "%s was run over by a car"
+  "gui.refueled_health": "%s %% health",
+  "gui.refueled_battery": "%s %% battery",
+  "gui.refueled_fuel": "%s %% fuel",
+  "gui.refueled_temperature_celsius": "%s °C",
+  "gui.refueled_temperature_fahrenheit": "%s °F",
+
+  "sound.refueled.engine": "Vehicle running",
+
+  "death.attack.hit_by_vehicle": "%s was ran over by a vehicle",
+  "death.attack.hit_by_vehicle.player": "%s got ran over by %c",
+  "death.attack.hit_by_vehicle_death": "%s died to an exploding vehicle",
+  "death.attack.hit_by_vehicle_death.player": "%s was killed by %c's bad driving"
 }

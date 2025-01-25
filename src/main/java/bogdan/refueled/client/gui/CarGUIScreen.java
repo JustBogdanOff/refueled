@@ -1,9 +1,9 @@
 package bogdan.refueled.client.gui;
 
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.common.accessors.ICarInvoker;
 import bogdan.refueled.common.gui.CarGUI;
 import bogdan.refueled.config.ClientConfig;
-import de.maxhenkel.car.Main;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -14,7 +14,7 @@ import net.minecraft.world.entity.player.Inventory;
 import static bogdan.refueled.Utils.round;
 
 public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
-    private static final ResourceLocation CAR_GUI_TEXTURE = new ResourceLocation(Main.MODID, "textures/gui/gui_car.png");
+    private static final ResourceLocation CAR_GUI_TEXTURE = new ResourceLocation(RefueledMain.MODID, "textures/gui/refueled_gui.png");
 
     private static final int fontColor = 4210752;
 
@@ -27,14 +27,14 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
         this.car = carGUI.getCar();
 
         imageWidth = 176;
-        imageHeight = 248;
+        imageHeight = 222;
     }
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         //Titles
-        guiGraphics.drawString(font, car.getDisplayName().getVisualOrderText(), 7, 87, fontColor, false);
-        guiGraphics.drawString(font, playerInv.getDisplayName().getVisualOrderText(), 8, this.imageHeight - 96 + 2, fontColor, false);
+        guiGraphics.drawString(font, car.getDisplayName().getVisualOrderText(), 7, 61, fontColor, false);
+        guiGraphics.drawString(font, playerInv.getDisplayName().getVisualOrderText(), 70, 129, fontColor, false);
 
         guiGraphics.drawString(font, getFuelString().getVisualOrderText(), 7, 9, fontColor, false);
         guiGraphics.drawString(font, getHealthString().getVisualOrderText(), 7, 35, fontColor, false);
@@ -63,7 +63,7 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
     }
 
     public Component getFuelString() {
-        return Component.translatable("gui.car_fuel", String.valueOf(getFuelPercent()));
+        return Component.translatable("gui.refueled_fuel", String.valueOf(getFuelPercent()));
     }
 
     public void drawFuel(GuiGraphics guiGraphics, float percent) {
@@ -81,7 +81,7 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
         return ((float) ((ICarInvoker) car).car$getBattery() / (float) ((ICarInvoker) car).car$getMaxBattery());
     }
     public Component getBatteryString() {
-        return Component.translatable("gui.car_battery", String.valueOf((int) (getBatteryPercent() * 100f)));
+        return Component.translatable("gui.refueled_battery", String.valueOf((int) (getBatteryPercent() * 100f)));
     }
 
     public void drawBattery(GuiGraphics guiGraphics, float percent) {
@@ -104,9 +104,9 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
 
     public Component getTemperatureString() {
         if (ClientConfig.temperatureFahrenheit.get()) {
-            return Component.translatable("gui.car_temperature_farenheit", String.valueOf(getTemperatureFarenheit()));
+            return Component.translatable("gui.refueled_temperature_fahrenheit", String.valueOf(getTemperatureFarenheit()));
         } else {
-            return Component.translatable("gui.car_temperature_celsius", String.valueOf(getTemperatureCelsius()));
+            return Component.translatable("gui.refueled_temperature_celsius", String.valueOf(getTemperatureCelsius()));
         }
     }
 
@@ -138,7 +138,7 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
     }
 
     public Component getHealthString() {
-        return Component.translatable("gui.refueled_car_health", String.valueOf(getHealthPercent()));
+        return Component.translatable("gui.refueled_health", String.valueOf(getHealthPercent()));
     }
 
     public void drawHealth(GuiGraphics guiGraphics, float percent) {

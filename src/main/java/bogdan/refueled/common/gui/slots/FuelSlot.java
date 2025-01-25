@@ -1,17 +1,17 @@
 package bogdan.refueled.common.gui.slots;
 
-import bogdan.refueled.common.sounds.RefueledSounds;
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.common.accessors.ICarInvoker;
 import bogdan.refueled.config.ServerConfig;
-import de.maxhenkel.car.fluids.ModFluids;
-import de.maxhenkel.car.items.ItemCanister;
-import de.maxhenkel.car.items.ModItems;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -32,26 +32,19 @@ public class FuelSlot extends Slot {
 
     @Override
     public void set(ItemStack stack) {
-        if (!(stack.getItem().equals(Items.COAL_BLOCK) && ServerConfig.useSubstitutes.get()) && !stack.getItem().equals(ModItems.CANISTER.get())) {
+        if (!(stack.getItem().equals(Items.LAVA_BUCKET))) {
             return;
         }
 
-        if(stack.getItem().equals(ModItems.CANISTER.get())) {
-            boolean success = ItemCanister.fuelFluidHandler(stack, (IFluidHandler) car);
+        Fluid fuelType = ((ICarInvoker) car).car$getFluid() == null ? Fluids.LAVA.getSource() : ((ICarInvoker) car).car$getFluid();
+        int amountToFill = Math.min(((ICarInvoker) car).car$getMaxFuel() - ((ICarInvoker) car).car$getFuel(), 800);
 
-            if (success) {
-                RefueledSounds.playSound(SoundEvents.BREWING_STAND_BREW, car.level(), car.blockPosition(), null, SoundSource.MASTER);
-            }
-        }
-        else{
-            Fluid fuelType = ((ICarInvoker) car).car$getFluid() == Fluids.EMPTY || ((ICarInvoker) car).car$getFluid() == null ? ModFluids.BIO_DIESEL.get() : ((ICarInvoker) car).car$getFluid();
-            int amountToFill = Math.min(((ICarInvoker) car).car$getMaxFuel() - ((ICarInvoker) car).car$getFuel(), 243);
-
-            if (amountToFill > 0) {
-                stack.shrink(1);
-                IFluidHandler handler = (IFluidHandler) car;
-                handler.fill(new FluidStack(fuelType, amountToFill), IFluidHandler.FluidAction.EXECUTE);
-                RefueledSounds.playSound(SoundEvents.BREWING_STAND_BREW, car.level(), car.blockPosition(), null, SoundSource.MASTER);
+        if (amountToFill > 0) {
+            stack.shrink(1);
+            IFluidHandler handler = (IFluidHandler) car;
+            handler.fill(new FluidStack(fuelType, amountToFill), IFluidHandler.FluidAction.EXECUTE);
+            if (!car.level().isClientSide) {
+                car.level().playSound(null, car.getX() + 0.5D, car.getY() + 0.5D, car.getZ() + 0.5D, SoundEvents.BREWING_STAND_BREW, SoundSource.MASTER, 0.15f, 1f);
             }
         }
 
@@ -62,26 +55,9 @@ public class FuelSlot extends Slot {
 
     @Override
     public boolean mayPlace(ItemStack stack) {
-        if(stack.getItem().equals(Items.COAL_BLOCK) && ServerConfig.useSubstitutes.get()){
+        if(stack.getItem().equals(Items.LAVA_BUCKET)){
             return ((ICarInvoker) car).car$getFuel() < ((ICarInvoker) car).car$getMaxFuel();
         }
-
-        if(stack.getItem().equals(ModItems.CANISTER.get())){
-            if(!stack.hasTag()){
-                return false;
-            }
-
-            if(!stack.getTag().contains("fuel")){
-                return false;
-            }
-            FluidStack fluidStack = FluidStack.loadFluidStackFromNBT(stack.getTag().getCompound("fuel"));
-            if(fluidStack == null || fluidStack.isEmpty()){
-                return false;
-            }
-
-            return ((ICarInvoker) car).car$getFuel() < ((ICarInvoker) car).car$getMaxFuel() && fluidStack.getAmount() <= 0;
-        }
-
         return false;
     }
 }

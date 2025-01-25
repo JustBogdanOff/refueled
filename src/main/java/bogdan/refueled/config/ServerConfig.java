@@ -1,10 +1,6 @@
 package bogdan.refueled.config;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -17,25 +13,40 @@ public class ServerConfig {
 
 
     public static final ForgeConfigSpec.DoubleValue modernStepHeight;
-    public static final ForgeConfigSpec.DoubleValue classicStepHeight;
-    public static final ForgeConfigSpec.DoubleValue truckStepHeight;
-    public static final ForgeConfigSpec.DoubleValue suvStepHeight;
-    public static final ForgeConfigSpec.DoubleValue sportStepHeight;
-    public static final ForgeConfigSpec.DoubleValue bikeStepHeight;
-
     public static final ForgeConfigSpec.DoubleValue modernRamDamage;
-    public static final ForgeConfigSpec.DoubleValue classicRamDamage;
-    public static final ForgeConfigSpec.DoubleValue truckRamDamage;
-    public static final ForgeConfigSpec.DoubleValue suvRamDamage;
-    public static final ForgeConfigSpec.DoubleValue sportRamDamage;
-    public static final ForgeConfigSpec.DoubleValue bikeRamDamage;
-
     public static final ForgeConfigSpec.DoubleValue modernFuelEff;
+    public static final ForgeConfigSpec.DoubleValue modernMaxRotation;
+    public static final ForgeConfigSpec.IntValue modernMaxFuel;
+
+    public static final ForgeConfigSpec.DoubleValue classicStepHeight;
+    public static final ForgeConfigSpec.DoubleValue classicRamDamage;
     public static final ForgeConfigSpec.DoubleValue classicFuelEff;
+    public static final ForgeConfigSpec.DoubleValue classicMaxRotation;
+    public static final ForgeConfigSpec.IntValue classicMaxFuel;
+
+    public static final ForgeConfigSpec.DoubleValue truckStepHeight;
+    public static final ForgeConfigSpec.DoubleValue truckRamDamage;
     public static final ForgeConfigSpec.DoubleValue truckFuelEff;
+    public static final ForgeConfigSpec.DoubleValue truckMaxRotation;
+    public static final ForgeConfigSpec.IntValue truckMaxFuel;
+
+    public static final ForgeConfigSpec.DoubleValue suvStepHeight;
+    public static final ForgeConfigSpec.DoubleValue suvRamDamage;
     public static final ForgeConfigSpec.DoubleValue suvFuelEff;
+    public static final ForgeConfigSpec.DoubleValue suvMaxRotation;
+    public static final ForgeConfigSpec.IntValue suvMaxFuel;
+
+    public static final ForgeConfigSpec.DoubleValue sportStepHeight;
     public static final ForgeConfigSpec.DoubleValue sportFuelEff;
+    public static final ForgeConfigSpec.DoubleValue sportRamDamage;
+    public static final ForgeConfigSpec.DoubleValue sportMaxRotation;
+    public static final ForgeConfigSpec.IntValue sportMaxFuel;
+
+    public static final ForgeConfigSpec.DoubleValue bikeStepHeight;
+    public static final ForgeConfigSpec.DoubleValue bikeRamDamage;
     public static final ForgeConfigSpec.DoubleValue bikeFuelEff;
+    public static final ForgeConfigSpec.DoubleValue bikeMaxRotation;
+    public static final ForgeConfigSpec.IntValue bikeMaxFuel;
 
     public static final ForgeConfigSpec.ConfigValue<List<? extends List<String>>> fuelEff;
 
@@ -48,129 +59,160 @@ public class ServerConfig {
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> roadBlocks;
 
     public static final ForgeConfigSpec.DoubleValue repairKitAmount;
-    public static final ForgeConfigSpec.BooleanValue useSubstitutes;
     public static final ForgeConfigSpec.BooleanValue explodeOnDeath;
 
     static {
         builder.push("car");
-        builder.push("vehicles");
-        builder.push("modern");
-            modernStepHeight = builder
-                    .comment("Stepping height for modern cars")
-                    .defineInRange("step_height", 1d, 0, 8d);
-            modernRamDamage = builder
-                    .comment("Damage applied to entities ran over by modern cars")
-                    .defineInRange("damage", 20d, 0, 100d);
-            modernFuelEff = builder
-                .comment("Modern cars' fuel consumption")
-                .defineInRange("fuel_eff", 0.7d * 0.5d, 0, 10d);
-        builder.pop();
+            builder.push("vehicles");
+                builder.push("modern");
+                    modernStepHeight = builder
+                            .comment("Stepping height for modern cars")
+                            .defineInRange("step_height", 1d, 0, 8d);
+                    modernRamDamage = builder
+                            .comment("Damage applied to entities ran over by modern cars")
+                            .defineInRange("damage", 20d, 0, 100d);
+                    modernMaxFuel = builder
+                            .comment("Max fuel capacity for modern cars")
+                            .defineInRange("fuel_cap", 1500, 0, 1000000);
+                    modernFuelEff = builder
+                            .comment("Modern cars' fuel consumption")
+                            .defineInRange("fuel_eff", 0.7d * 0.5d, 0, 10d);
+                    modernMaxRotation = builder
+                            .comment("Modern cars' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+                builder.pop();
 
-        builder.push("classic");
-        classicStepHeight = builder
-                .comment("Stepping height for classic cars")
-                .defineInRange("step_height", 1d, 0, 8d);
-        classicRamDamage = builder
-                .comment("Damage applied to entities ran over by classic cars")
-                .defineInRange("damage", 20d, 0, 100d);
-        classicFuelEff = builder
-                .comment("Classic cars' fuel consumption")
-                .defineInRange("fuel_eff", 0.8d * 0.5d, 0, 10d);
-        builder.pop();
+                builder.push("classic");
+                    classicStepHeight = builder
+                            .comment("Stepping height for classic cars")
+                            .defineInRange("step_height", 1d, 0, 8d);
+                    classicRamDamage = builder
+                            .comment("Damage applied to entities ran over by classic cars")
+                            .defineInRange("damage", 20d, 0, 100d);
+                    classicMaxFuel = builder
+                            .comment("Max fuel capacity for classic cars")
+                            .defineInRange("fuel_cap", 1500, 0, 1000000);
+                    classicFuelEff = builder
+                            .comment("Classic cars' fuel consumption")
+                            .defineInRange("fuel_eff", 0.8d * 0.5d, 0, 10d);
+                    classicMaxRotation = builder
+                            .comment("Classic cars' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+                builder.pop();
 
-        builder.push("truck");
-        truckStepHeight = builder
-                .comment("Stepping height for trucks")
-                .defineInRange("step_height", 2d, 0, 8d);
-        truckRamDamage = builder
-                .comment("Damage applied to entities ran over by trucks")
-                .defineInRange("damage", 30d, 0, 100d);
-        truckFuelEff = builder
-                .comment("Trucks' fuel consumption")
-                .defineInRange("fuel_eff", 0.6d * 0.8d, 0, 10d);
-        builder.pop();
+                builder.push("truck");
+                    truckStepHeight = builder
+                            .comment("Stepping height for trucks")
+                            .defineInRange("step_height", 2d, 0, 8d);
+                    truckRamDamage = builder
+                            .comment("Damage applied to entities ran over by trucks")
+                            .defineInRange("damage", 30d, 0, 100d);
+                    truckMaxFuel = builder
+                            .comment("Max fuel capacity for trucks")
+                            .defineInRange("fuel_cap", 2000, 0, 1000000);
+                    truckFuelEff = builder
+                            .comment("Trucks' fuel consumption")
+                            .defineInRange("fuel_eff", 0.6d * 0.8d, 0, 10d);
+                    truckMaxRotation = builder
+                            .comment("Trucks' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+                builder.pop();
 
-        builder.push("suv");
-        suvStepHeight = builder
-                .comment("Stepping height for SUVs")
-                .defineInRange("step_height", 1.6d, 0, 8d);
-        suvRamDamage = builder
-                .comment("Damage applied to entities ran over by SUVs")
-                .defineInRange("damage", 25d, 0, 100d);
-        suvFuelEff = builder
-                .comment("SUVs cars' fuel consumption")
-                .defineInRange("fuel_eff", 0.6d * 0.8d, 0, 10d);
-        builder.pop();
+                builder.push("suv");
+                    suvStepHeight = builder
+                            .comment("Stepping height for SUVs")
+                            .defineInRange("step_height", 1.6d, 0, 8d);
+                    suvRamDamage = builder
+                            .comment("Damage applied to entities ran over by SUVs")
+                            .defineInRange("damage", 25d, 0, 100d);
+                    suvMaxFuel = builder
+                            .comment("Max fuel capacity for SUVs")
+                            .defineInRange("fuel_cap", 2000, 0, 1000000);
+                    suvFuelEff = builder
+                            .comment("SUVs' fuel consumption")
+                            .defineInRange("fuel_eff", 0.6d * 0.8d, 0, 10d);
+                    suvMaxRotation = builder
+                            .comment("SUVs' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+                builder.pop();
 
-        builder.push("sport");
-        sportStepHeight = builder
-                .comment("Stepping height for sport cars")
-                .defineInRange("step_height", 0.6d, 0, 8d);
-        sportRamDamage = builder
-                .comment("Damage applied to entities ran over by sport cars")
-                .defineInRange("damage", 15d, 0, 100d);
-        sportFuelEff = builder
-                .comment("Sport cars' fuel consumption")
-                .defineInRange("fuel_eff", 0.9d * 0.25d, 0, 10d);
-        builder.pop();
+                builder.push("sport");
+                    sportStepHeight = builder
+                            .comment("Stepping height for sport cars")
+                            .defineInRange("step_height", 0.6d, 0, 8d);
+                    sportRamDamage = builder
+                            .comment("Damage applied to entities ran over by sport cars")
+                            .defineInRange("damage", 15d, 0, 100d);
+                    sportMaxFuel = builder
+                            .comment("Max fuel capacity for sport cars")
+                            .defineInRange("fuel_cap", 1000, 0, 1000000);
+                    sportFuelEff = builder
+                            .comment("Sport cars' fuel consumption")
+                            .defineInRange("fuel_eff", 0.9d * 0.25d, 0, 10d);
+                    sportMaxRotation = builder
+                            .comment("Soirt cars' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+                builder.pop();
 
-        builder.push("bike");
-        bikeStepHeight = builder
-                .comment("Stepping height for motorcycles")
-                .defineInRange("step_height", 2d, 0, 8d);
-        bikeRamDamage = builder
-                .comment("Damage applied to entities ran over by motorcycles")
-                .defineInRange("damage", 10d, 0, 100d);
-        bikeFuelEff = builder
-                .comment("Motorcycles' fuel consumption")
-                .defineInRange("fuel_eff", 0.9d * 0.5d, 0, 10d);
-        builder.pop(2);
+                builder.push("bike");
+                    bikeStepHeight = builder
+                            .comment("Stepping height for motorcycles")
+                            .defineInRange("step_height", 2d, 0, 8d);
+                    bikeRamDamage = builder
+                            .comment("Damage applied to entities ran over by motorcycles")
+                            .defineInRange("damage", 10d, 0, 100d);
+                    bikeMaxFuel = builder
+                            .comment("Max fuel capacity for motorcycles")
+                            .defineInRange("fuel_cap", 1000, 0, 1000000);
+                    bikeFuelEff = builder
+                            .comment("Motorcycles' fuel consumption")
+                            .defineInRange("fuel_eff", 0.9d * 0.5d, 0, 10d);
+                    bikeMaxRotation = builder
+                            .comment("Motorcycles' turning rate at max speed")
+                            .defineInRange("max_rotation", 1.1d, 0.01d, 5d);
+            builder.pop(2);
 
-        fuelEff = builder
-                .comment("Fluids defined as acceptable fuels for vehicles, along with their efficiency")
-                .defineList("fuels", List.of(List.of("car:bio_diesel", "100")), ServerConfig::validateFuel);
+            fuelEff = builder
+                    .comment("Fluids defined as acceptable fuels for vehicles, along with their efficiency")
+                    .defineList("fuels", List.of(List.of("minecraft:lava", "100")), ServerConfig::validateFuel);
 
-        useBattery = builder
-                .comment("Whether to use the battery")
-                .define("use_battery", false);
+            useBattery = builder
+                    .comment("Whether to use the battery")
+                    .define("use_battery", false);
 
-        hornFlee = builder
-                .comment("Whether mobs run away from the horn")
-                .define("horn_flee", true);
+            hornFlee = builder
+                    .comment("Whether mobs run away from the horn")
+                    .define("horn_flee", true);
 
-        damageEntities = builder
-                .comment("Whether to damage any entities in the way of the vehicle")
-                .define("damage_entities", true);
+            damageEntities = builder
+                    .comment("Whether to damage any entities in the way of the vehicle")
+                    .define("damage_entities", true);
 
-        collideWithEntities = builder
-                .comment("Whether to stop the car as if it came in collision with a block when impacting an entity")
-                .define("collide_with_entities", false);
+            collideWithEntities = builder
+                    .comment("Whether to stop the car as if it came in collision with a block when impacting an entity")
+                    .define("collide_with_entities", false);
 
-        offroadSpeed = builder
-                .comment("Speed modifier for DragN's vehicles on non-road blocks")
-                .defineInRange("offroad_speed", 1d, 0.001d, 10d);
+            offroadSpeed = builder
+                    .comment("Speed modifier for DragN's vehicles on non-road blocks")
+                    .defineInRange("offroad_speed", 1d, 0.001d, 10d);
 
-        onroadSpeed = builder
-                .comment("The speed modifier for cars on road blocks", "On road blocks are defined in the 'road_blocks' section of this config")
-                .defineInRange("onroad_speed", 1.5d, 0.001d, 10d);
+            onroadSpeed = builder
+                    .comment("The speed modifier for cars on road blocks", "On road blocks are defined in the 'road_blocks' section of this config")
+                    .defineInRange("onroad_speed", 1.5d, 0.001d, 10d);
 
-        builder.push("road_blocks");
-        roadBlocks = builder
-                .comment("A list of blocks considered on-road for cars", "If it starts with '#' it is a tag")
-                .defineList("blocks", List.of("#refueled:road_blocks", "#car:asphalt_blocks"), ServerConfig::validateBlock);
-        builder.pop();
+            builder.push("road_blocks");
+                roadBlocks = builder
+                        .comment("A list of blocks considered on-road for cars", "If it starts with '#' it is a tag")
+                        .defineList("blocks", List.of("#refueled:road_blocks"), ServerConfig::validateBlock);
+            builder.pop();
 
-        repairKitAmount = builder
-                .comment("Defines how much the repair kit should heal the car")
-                .defineInRange("repair_kit_amount", 5f, 0f, 100f);
+            repairKitAmount = builder
+                    .comment("Defines how much the repair kit should heal the car")
+                    .defineInRange("repair_kit_amount", 5f, 0f, 100f);
 
-        useSubstitutes = builder
-                .comment("Whether to allow Ultimate Car Mod item substitutes (Coal block for fuel, iron block for repair kit, redstone dust for battery)")
-                .define("use_substitutes", true);
-
-        explodeOnDeath = builder
-                .comment("Whether the vehicle should cause an explosion on death")
-                .define("explode", true);
+            explodeOnDeath = builder
+                    .comment("Whether the vehicle should cause an explosion on death")
+                    .define("explode", true);
 
         builder.pop();
         SPEC = builder.build();

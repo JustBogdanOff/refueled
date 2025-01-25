@@ -16,25 +16,22 @@ import org.jetbrains.annotations.NotNull;
 public class CarGUI extends AbstractContainerMenu {
 
     private final Container car, playerInventory;
-    private int getInvOffset(){
-        return 82;
-    }
 
     public CarGUI(int id, Inventory playerInventory, Container car) {
         super(RefueledRegistry.CAR_GUI.get(), id);
         this.playerInventory = playerInventory;
         this.car = car;
-        int numRows = car.getContainerSize() / 9;
+        int numRows = car.getContainerSize() / 8;
 
-        for (int j = 0; j < numRows; j++) {
-            for (int k = 0; k < 9; k++) {
-                addSlot(new Slot(car, k + j * 9, 8 + k * 18, 98 + j * 18));
+        for (int  j = 0; j < numRows; j++) {
+            for (int k = 0; k < 8; k++) {
+                addSlot(new Slot(car, k + j * 8, 26 + k * 18, 72 + j * 18));
             }
         }
 
-        addSlot(new FuelSlot((Entity) car, 0, 98, 66, playerInventory.player));
-        addSlot(new BatterySlot((Entity) car, 0, 116, 66, playerInventory.player));
-        addSlot(new RepairSlot((Entity) car, 0, 134, 66, playerInventory.player));
+        addSlot(new FuelSlot((Entity) car, 0, 8, 72, playerInventory.player));
+        addSlot(new BatterySlot((Entity) car, 0, 8, 90, playerInventory.player));
+        addSlot(new RepairSlot((Entity) car, 0, 8, 108, playerInventory.player));
 
         addPlayerInventorySlots();
     }
@@ -43,12 +40,12 @@ public class CarGUI extends AbstractContainerMenu {
         if (playerInventory != null) {
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 9; j++) {
-                    addSlot(new Slot(playerInventory, j + i * 9 + 9, 8 + j * 18, 84 + i * 18 + getInvOffset()));
+                    addSlot(new Slot(playerInventory, j + i * 9 + 9, 8 + j * 18, 140 + i * 18));
                 }
             }
 
             for (int k = 0; k < 9; k++) {
-                addSlot(new Slot(playerInventory, k, 8 + k * 18, 142 + getInvOffset()));
+                addSlot(new Slot(playerInventory, k, 8 + k * 18, 198));
             }
         }
     }

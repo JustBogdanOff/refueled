@@ -1,9 +1,10 @@
 package bogdan.refueled.common.gui.slots;
 
-import bogdan.refueled.common.sounds.RefueledSounds;
 import bogdan.refueled.common.accessors.ICarInvoker;
 import bogdan.refueled.config.ServerConfig;
-import de.maxhenkel.car.items.ModItems;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
@@ -25,36 +26,22 @@ public class RepairSlot extends Slot {
 
     @Override
     public void set(ItemStack stack) {
-        if (!(stack.getItem().equals(Items.IRON_BLOCK) && ServerConfig.useSubstitutes.get()) && !stack.getItem().equals(ModItems.REPAIR_KIT.get())) {
+        if (!(stack.getItem().equals(Items.IRON_INGOT))) {
             return;
         }
 
-        if(stack.getItem().equals(Items.IRON_BLOCK)) {
-            if ((int) (((ICarInvoker) car).car$getHealth() / ((ICarInvoker) car).car$getMaxHealth()) <= 5) {
-
-                stack.shrink(1);
-
-                float health = ((ICarInvoker) car).car$getHealth() + 0.4f * ServerConfig.repairKitAmount.get().floatValue();
-                if (0 <= health && health <= ((ICarInvoker) car).car$getMaxHealth()) {
-                    ((ICarInvoker) car).car$setHealth(health);
-                }
-                RefueledSounds.playSound(RefueledSounds.RATCHET.get(), car.level(), car.blockPosition(), null, SoundSource.BLOCKS);
-            }
-
-            if (!player.getInventory().add(stack)) {
-                Containers.dropItemStack(car.level(), car.getX(), car.getY(), car.getZ(), stack);
-            }
-        }
-        if(stack.getItem().equals(ModItems.REPAIR_KIT.get())){
-            if ((int) (((ICarInvoker) car).car$getHealth() / ((ICarInvoker) car).car$getMaxHealth()) <= 5) {
+        if(stack.getItem().equals(Items.IRON_INGOT)) {
+            if ((int) (((ICarInvoker) car).car$getHealth() / ((ICarInvoker) car).car$getMaxHealth()) <= 20) {
 
                 stack.shrink(1);
 
                 float health = ((ICarInvoker) car).car$getHealth() + ServerConfig.repairKitAmount.get().floatValue();
                 if (0 <= health && health <= ((ICarInvoker) car).car$getMaxHealth()) {
                     ((ICarInvoker) car).car$setHealth(health);
+                    if(!car.level().isClientSide) {
+                        car.level().playSound(null, car.blockPosition(), SoundEvents.SPYGLASS_USE, SoundSource.BLOCKS, 1f, 0.75f);
+                    }
                 }
-                RefueledSounds.playSound(RefueledSounds.RATCHET.get(), car.level(), car.blockPosition(), null, SoundSource.BLOCKS);
             }
 
             if (!player.getInventory().add(stack)) {
@@ -65,8 +52,8 @@ public class RepairSlot extends Slot {
 
     @Override
     public boolean mayPlace(ItemStack stack) {
-        if((stack.getItem().equals(Items.IRON_BLOCK) && ServerConfig.useSubstitutes.get()) || stack.getItem().equals(ModItems.REPAIR_KIT.get())) {
-            return (int) ((((ICarInvoker) car).car$getHealth() / ((ICarInvoker) car).car$getMaxHealth()) * 100f) <= 5;
+        if(stack.getItem().equals(Items.IRON_INGOT)) {
+            return (int) ((((ICarInvoker) car).car$getHealth() / ((ICarInvoker) car).car$getMaxHealth()) * 100f) <= 20;
         }
         return false;
     }

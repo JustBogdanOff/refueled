@@ -14,67 +14,62 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 public abstract class CarRenderMixin {
 
     @ModifyArg(
-        method = "render*",
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
-        ),
-        index = 0,
-        remap = false
+            method = "render*",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
+            ),
+            index = 0
     )
     private float shrinkRenderX(float originalX){
-        return -0.8f;
+        return -0.6f;
     }
 
     @ModifyArg(
-        method = "render*",
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
-        ),
-        index = 1,
-        remap = false
+            method = "render*",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
+            ),
+            index = 1
     )
     private float shrinkRenderZ(float originalZ){
-        return -0.8f;
+        return -0.6f;
     }
 
     @ModifyArg(
-        method = "render*",
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
-        ),
-        index = 2,
-        remap = false
+            method = "render*",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"
+            ),
+            index = 2
     )
     private float shrinkRenderY(float originalY){
-        return 0.8f;
+        return 0.6f;
     }
 
     @ModifyArg(
-        method = "<clinit>",
-        at = @At(
-                value = "INVOKE",
-                target = "Lcom/dragn0007/dragnvehicles/Animation$KeyFrame;<init>(FFFF)V",
-                ordinal = 6
-        ),
-        index = 0,
-        remap = false
+            method = "<clinit>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/dragn0007/dragnvehicles/Animation$KeyFrame;<init>(FFFF)V",
+                    ordinal = 6
+            ),
+            index = 0
     )
     private static float modifyFrontKeyFrame(float original){
         return 1f;
     }
 
     @ModifyArg(
-        method = "<clinit>",
-        at = @At(
-                value = "INVOKE",
-                target = "Lcom/dragn0007/dragnvehicles/Animation$KeyFrame;<init>(FFFF)V",
-                ordinal = 8
-        ),
-        index = 0,
-        remap = false
+            method = "<clinit>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/dragn0007/dragnvehicles/Animation$KeyFrame;<init>(FFFF)V",
+                    ordinal = 8
+            ),
+            index = 0
     )
     private static float modifyBackKeyFrame(float original){
         return 1f;

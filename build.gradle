@@ -1,8 +1,6 @@
 buildscript {
     repositories {
-        maven {
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-        }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
     }
     dependencies {
         classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
@@ -31,7 +29,6 @@ base.archivesName = mod_id
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 minecraft {
     mappings channel: mapping_channel, version: mapping_version
     copyIdeResources = true
@@ -81,18 +78,19 @@ repositories {
             includeGroup "curse.maven"
         }
     }
+    maven {
+        url "https://api.modrinth.com/maven"
+    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-
-    implementation fg.deobf("curse.maven:dragns-valiant-vehicles-1038652:5778739")
-    implementation fg.deobf("curse.maven:ultimate-car-mod-267458:5770402")
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    implementation fg.deobf("curse.maven:dragns-valiant-vehicles-1038652:5778739") // 1.3
 
     runtimeOnly fg.deobf("curse.maven:jei-238222:5793246")
     runtimeOnly fg.deobf("curse.maven:the-one-probe-245211:5159287")
-    //runtimeOnly fg.deobf("curse.maven:mouse-tweaks-60089:5338457")
 }
 
 tasks.named('processResources', ProcessResources).configure {
