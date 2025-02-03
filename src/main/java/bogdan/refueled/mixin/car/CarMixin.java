@@ -2,10 +2,6 @@ package bogdan.refueled.mixin.car;
 
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.network.*;
-import bogdan.refueled.common.sounds.RefueledHigh;
-import bogdan.refueled.common.sounds.RefueledIdle;
-import bogdan.refueled.common.sounds.RefueledStart;
-import bogdan.refueled.common.sounds.RefueledStarting;
 import bogdan.refueled.common.accessors.ICarInvoker;
 import bogdan.refueled.common.gui.CarGUI;
 import bogdan.refueled.config.ServerConfig;
@@ -539,16 +535,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
     @Unique
     public boolean car$isStarted() {
-        return entityData.get(car$STARTED);
+        return this.entityData.get(car$STARTED);
     }
 
     @Unique
     private static boolean car$carStopped = false, car$carStarted = false;
 
-    /**
-     * Fail sound is only played when stopping the starting process
-     */
-    @Override
+    @Unique
     public void car$setStarting(boolean starting, boolean playFailSound) {
         if (starting) {
             if (car$getBattery() <= 0) {
@@ -583,6 +576,53 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             car$playFailSound();
         }
         this.entityData.set(car$STARTED, started);
+    }
+
+    @Unique
+    public void car$playStopSound() {
+        if(!(level().isClientSide)) {
+            level().playSound(
+                    null,
+                    blockPosition().getX() + 0.5d,
+                    blockPosition().getY() + 0.5d,
+                    blockPosition().getZ() + 0.5d,
+                    SoundEvents.CHAIN_HIT,
+                    SoundSource.MASTER,
+                    1f,
+                    0f
+            );
+        }
+    }
+
+    @Unique
+    public void car$playFailSound() {
+        if(!(level().isClientSide)) {
+            level().playSound(
+                    null,
+                    blockPosition().getX() + 0.5d,
+                    blockPosition().getY() + 0.5d,
+                    blockPosition().getZ() + 0.5d,
+                    SoundEvents.FIRE_EXTINGUISH,
+                    SoundSource.MASTER,
+                    1f,
+                    1f + car$getBatterySoundPitchLevel()
+            );
+        }
+    }
+
+    @Unique
+    public void car$playCrashSound() {
+        if(!level().isClientSide) {
+            level().playSound(
+                    null,
+                    (double) blockPosition().getX() + 0.5D,
+                    (double) blockPosition().getY() + 0.5D,
+                    (double) blockPosition().getZ() + 0.5D,
+                    SoundEvents.ANVIL_LAND,
+                    SoundSource.MASTER,
+                    1f,
+                    1f);
+        }
     }
 
     @Unique
@@ -671,11 +711,11 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         if (car$getDriver() == null || !car$canPlayerDriveCar(car$getDriver())) {
             return false;
         }
-        return entityData.get(car$RIGHT);
+        return this.entityData.get(car$RIGHT);
     }
 
     @Unique
-    private boolean car$collidedLastTick, car$startedLast;
+    private boolean car$collidedLastTick;
 
     @Unique
     private void car$handleInput() {
@@ -756,129 +796,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
     }
 
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$updateSounds() {
-        if (!car$isStarted() && car$isStarting()) {
-            car$checkStartingLoop();
-        }
-
-        if (car$getSpeed() == 0 && car$isStarted()) {
-
-            if (!car$startedLast) {
-                car$checkStartLoop();
-            } else if (!car$isSoundPlaying(car$startLoop)) {
-                if (car$startLoop != null) {
-                    car$startLoop.setDonePlaying();
-                    car$startLoop = null;
-                }
-
-                car$checkIdleLoop();
-            }
-        }
-        if (car$getSpeed() != 0 && car$isStarted()) {
-            car$checkHighLoop();
-        }
-
-        car$startedLast = car$isStarted();
-    }
-
-
-    @Unique
-    private RefueledStart car$startLoop;
-
-    @Unique
-    private RefueledIdle car$idleLoop;
-
-    @Unique
-    private RefueledHigh car$highLoop;
-
-    @Unique
-    private RefueledStarting car$startingLoop;
-
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$checkIdleLoop() {
-        if (!car$isSoundPlaying(car$idleLoop)) {
-            car$idleLoop = new RefueledIdle(this, car$getEngineSound(), SoundSource.MASTER);
-            car$playSoundLoop(car$idleLoop, level());
-        }
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$checkHighLoop() {
-        if (!car$isSoundPlaying(car$highLoop)) {
-            car$highLoop = new RefueledHigh(this, car$getEngineSound(), SoundSource.MASTER);
-            car$playSoundLoop(car$highLoop, level());
-        }
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$checkStartLoop() {
-        if (!car$isSoundPlaying(car$startLoop)) {
-            car$startLoop = new RefueledStart(this, SoundEvents.FIRECHARGE_USE, SoundSource.MASTER);
-            car$playSoundLoop(car$startLoop, level());
-        }
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    @Unique
-    public void car$checkStartingLoop() {
-        if (!car$isSoundPlaying(car$startingLoop)) {
-            car$startingLoop = new RefueledStarting(this, SoundEvents.TNT_PRIMED, SoundSource.MASTER);
-            car$playSoundLoop(car$startingLoop, level());
-        }
-    }
-
-    @Unique
-    public void car$playStopSound() {
-        if(!(level().isClientSide)) {
-            level().playSound(
-                    null,
-                    blockPosition().getX() + 0.5d,
-                    blockPosition().getY() + 0.5d,
-                    blockPosition().getZ() + 0.5d,
-                        SoundEvents.CHAIN_HIT,
-                        SoundSource.MASTER,
-                    1f,
-                    0f
-            );
-        }
-    }
-
-
-    @Unique
-    public void car$playFailSound() {
-        if(!(level().isClientSide)) {
-            level().playSound(
-                    null,
-                    blockPosition().getX() + 0.5d,
-                    blockPosition().getY() + 0.5d,
-                    blockPosition().getZ() + 0.5d,
-                        SoundEvents.FIRE_EXTINGUISH,
-                        SoundSource.MASTER,
-                1f,
-                        1f + car$getBatterySoundPitchLevel()
-            );
-        }
-    }
-
-    @Unique
-    public void car$playCrashSound() {
-        if(!level().isClientSide) {
-            level().playSound(
-                    null,
-                    (double) blockPosition().getX() + 0.5D,
-                    (double) blockPosition().getY() + 0.5D,
-                    (double) blockPosition().getZ() + 0.5D,
-                    SoundEvents.ANVIL_LAND,
-                    SoundSource.MASTER,
-                    1f,
-                    1f);
-        }
-    }
 
     @Shadow(remap = false)
     public Vec3 lastClientPos;
@@ -1186,11 +1103,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             return false;
         }
 
-        if (isInWater() || isInLava()) {
-            return false;
-        }
-
-        return true;
+        return !isInWater() && !isInLava();
     }
 
     @Override

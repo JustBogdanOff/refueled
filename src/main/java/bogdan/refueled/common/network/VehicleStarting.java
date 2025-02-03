@@ -39,11 +39,13 @@ public class VehicleStarting {
         ServerPlayer player = supplier.get().getSender();
         // Here we are server side
         if (!player.getUUID().equals(uuid)) {
-            RefueledMain.LOGGER.error("The UUID of the sender was not equal to the packet UUID");
+            RefueledMain.LOGGER.error("Mismatching sender and packet UUIDs");
             return false;
         }
         Entity car = player.getVehicle();
-        if(!isCar(car)) return false;
+        if(!isCar(car)) {
+            return false;
+        }
 
         if (player.equals(car.getControllingPassenger())) {
             ((ICarInvoker) car).car$setStarting(start, playFailSound);

@@ -103,4 +103,7 @@ public interface ICarInvoker{
     }
 
     Fluid car$getFluid();
+
+    void car$updateSounds();
+    void car$initTemperature();
 }

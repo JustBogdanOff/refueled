@@ -34,6 +34,7 @@ public class KeyEvent {
         }
         if (player.equals(car.getControllingPassenger())) {
             ((ICarInvoker) car).car$updateControls(Minecraft.getInstance().options.keyUp.isDown(), Minecraft.getInstance().options.keyDown.isDown(), Minecraft.getInstance().options.keyLeft.isDown(), Minecraft.getInstance().options.keyRight.isDown(), player);
+
             if (RefueledMain.START_KEY.isDown()) {
                 if (!wasStartPressed) {
                     RefueledChannel.sendToServer(new VehicleStarting(true, false, player));

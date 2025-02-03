@@ -29,6 +29,7 @@ public class CarSpawnMixin {
         if(car != null){
             ((ICarInvoker) car).car$setBattery(((ICarInvoker) car).car$getMaxBattery());
             ((IFluidHandler) car).fill(new FluidStack(Fluids.LAVA, ((ICarInvoker) car).car$getMaxFuel()), IFluidHandler.FluidAction.EXECUTE);
+            ((ICarInvoker) car).car$initTemperature();
         }
         return car;
     }
