@@ -84,18 +84,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         int i = this.getPassengers().indexOf(entity);
         entity.setPos(this.calcOffset(car$getSeatPositions()[i].x, car$getSeatPositions()[i].y, car$getSeatPositions()[i].z));
 
-        float sizeMod = 0.6f;
-        if((Entity) this instanceof Motorcycle){
-            sizeMod = 0.8f;
-        }
-
-        entity.setBoundingBox(
-                AABB.ofSize(
-                        entity.getBoundingBox().getCenter(),
-                        entity.getDimensions(Pose.SITTING).width * sizeMod,
-                        entity.getDimensions(Pose.SITTING).height * sizeMod * 0.7, // 30% of bounding box is legs
-                        entity.getDimensions(Pose.SITTING).width * sizeMod
-                ).move(0, entity.getDimensions(Pose.SITTING).height * sizeMod * ((Entity) this instanceof Motorcycle ? 0.085 : -0.115), 0)
+        float sizeMod = (Entity) this instanceof Motorcycle ? sizeFactor.floatValue() * 1.33f : sizeFactor.floatValue(),
+                offset = entity.getDimensions(Pose.SITTING).width * 0.5f * (1f - sizeMod);
+        AABB oldBB = entity.getBoundingBox();
+        entity.setBoundingBox(new AABB(
+                oldBB.minX + offset, oldBB.minY + entity.getBbHeight() * 0.3d * sizeMod, oldBB.minZ + offset, // Legs are tucked up, so 30% gone from the bottom
+                oldBB.maxX - offset, oldBB.maxY - entity.getBbHeight() * (1d - sizeMod), oldBB.maxZ - offset
+            ).move(new Vec3(0, entity.getBbHeight() * 0.05 * sizeMod, 0))
         );
         ((IHeightAccess) entity).setEyeHeight(entity.getEyeHeight(Pose.SITTING) * sizeMod);
 
@@ -857,7 +852,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             } else {
                 car$timeSinceStarted = 0;
             }
-            return; //Important because car not going off bug
+            return;
         }
 
         // SERVER SIDE
@@ -1234,7 +1229,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             double d2 = getZ() + (targetZ - getZ()) / (double) lerpSteps;
             double d3 = Mth.wrapDegrees(targetYRot - (double) getYRot());
             setYRot((float) ((double) getYRot() + d3 / (double) lerpSteps));
-            setXRot((float) ((double) getXRot() + (car$clientPitch - (double) getXRot()) / (double) lerpSteps));
             --lerpSteps;
             setPos(d0, d1, d2);
             setRot(getYRot(), getXRot());
@@ -1621,6 +1615,16 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         public int car$getMaxFuel() {
             return ServerConfig.classicMaxFuel.get();
         }
+
+        @Override
+        public Vec3[] car$getSeatPositions() {
+            return new Vec3[]{
+                    new Vec3(0.65 * sizeFactor, 0.1 * sizeFactor, 0.1 * sizeFactor),
+                    new Vec3(-0.65 * sizeFactor, 0.1 * sizeFactor, 0.1 * sizeFactor),
+                    new Vec3(0.65 * sizeFactor, 0.1 * sizeFactor, -2.2 * sizeFactor),
+                    new Vec3(-0.65 * sizeFactor, 0.1 * sizeFactor, -2.2 * sizeFactor)
+            };
+        }
     }
 
     @Mixin(Truck.class)
@@ -1781,15 +1785,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             cir.setReturnValue(ServerConfig.sportStepHeight.get().floatValue());
         }
 
-        public Vec3[] car$getSeatPositions(){
-            Vec3[] seatPos = new Vec3[4];
-
-            seatPos[0] = new Vec3(0.6 * 0.7, 0.1 * 0.6 - 0.125, -0.2 * 0.4);
-            seatPos[1] = new Vec3(-0.6 * 0.7, 0.1 * 0.6 - 0.125, -0.2 * 0.4);
-            seatPos[2] = new Vec3(0.6 * 0.7, 0.1 * 0.6 - 0.125, -2.0 * 0.4);
-            seatPos[3] = new Vec3(-0.6 * 0.7, 0.1 * 0.6 - 0.125, -2.0 * 0.4);
-
-            return seatPos;
+        public Vec3[] car$getSeatPositions() {
+            return new Vec3[]{
+                    new Vec3(0.7 * sizeFactor, 0, 0.1 * sizeFactor),
+                    new Vec3(-0.7 * sizeFactor, 0, 0.1 * sizeFactor),
+                    new Vec3(0.7 * sizeFactor, 0, -2.2 * sizeFactor),
+                    new Vec3(-0.7 * sizeFactor, 0, -2.2 * sizeFactor)
+            };
         }
 
         public float car$getRamDamage(){
@@ -1802,11 +1804,11 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         public double[] car$getExhaust(int rand){
             double[] modX = new double[]{1D, -1D, 1D, -1D};
-            double radius = Math.sqrt((2.1D - 1D) * (2.1D - 1D) + (0.6D - 0) * (0.6D - 0));                             // calculates distance from entity center to exhaust point
-            double pointDist = Math.sqrt((2.1D - (1D + radius)) * (2.1D - (1D + radius)) + (0.6D - 0) * (0.6D - 0));    // calculates distance from exhaust point to current entity viewing point
+            double radius = Math.sqrt((1d + 1.8d * sizeFactor - 1D) * (1d + 1.8d * sizeFactor - 1D) + (sizeFactor - 0) * (sizeFactor - 0));                             // calculates distance from entity center to exhaust point
+            double pointDist = Math.sqrt((1d + 1.8d * sizeFactor - (1D + radius)) * (1d + 1.8d * sizeFactor - (1D + radius)) + (sizeFactor - 0) * (sizeFactor - 0));    // calculates distance from exhaust point to current entity viewing point
             double angle = 2 * Math.asin(0.5 * pointDist / radius) * modX[rand];
 
-            return new double[]{radius, angle, 0.05D};
+            return new double[]{radius, angle, 0.08D * sizeFactor};
         }
 
         public float car$getMinRotationSpeed(){
@@ -1875,11 +1877,9 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         public Vec3[] car$getSeatPositions(){
-            Vec3[] seatPos = new Vec3[1];
-
-            seatPos[0] = new Vec3(0 * 0.6, 0.8 * 0.4, -0.5 * 0.6);
-
-            return seatPos;
+            return new Vec3[]{
+                    new Vec3(0, 0.8 * 0.7 * sizeFactor, -0.5 * sizeFactor)
+            };
         }
 
         public float car$getRamDamage(){

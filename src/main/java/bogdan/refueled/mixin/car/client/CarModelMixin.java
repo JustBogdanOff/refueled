@@ -10,12 +10,12 @@ import com.dragn0007.dragnvehicles.vehicle.suv.SUVModel;
 import com.dragn0007.dragnvehicles.vehicle.truck.TruckModel;
 import net.minecraft.client.model.geom.ModelPart;
 import org.spongepowered.asm.mixin.*;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Coerce;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.*;
+
+import java.util.*;
 
 @Mixin(value = {CarModel.class, ClassicModel.class, TruckModel.class, SUVModel.class, SportCarModel.class, MotorcycleModel.class})
-public abstract class CarModelMixin {
+public abstract class CarModelMixin{
 
     @Redirect(
             remap = false,
@@ -54,5 +54,26 @@ public abstract class CarModelMixin {
     )
     private void refueled$redirectBackAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3, @Coerce Object car, float partialTick){
         ((ICarInvoker) (Object) animation).car$animate(modelPart, animation, ((ICarInvoker) car).car$getWheelRotation(partialTick));
+    }
+
+    @ModifyArg(
+            method = "createBodyLayer",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/model/geom/PartPose;offset(FFF)Lnet/minecraft/client/model/geom/PartPose;"
+            ),
+            index = 2
+    )
+    private static float offsetParts(float pZ){
+        Map<Object, Float> offsets = new HashMap<>();
+
+        offsets.put(CarModel.class, 6f);
+        offsets.put(ClassicModel.class, 6f);
+        offsets.put(TruckModel.class, 6f);
+        offsets.put(SUVModel.class, 6f);
+        offsets.put(SportCarModel.class, 3f);
+        offsets.put(MotorcycleModel.class, 2.5f);
+
+        return pZ - offsets.get(CarModelMixin.class);
     }
 }

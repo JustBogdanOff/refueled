@@ -13,7 +13,20 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public interface ICarInvoker{
+
+    Double sizeFactor = 0.66d;
+
+    // CLIENT
     void car$animate(ModelPart modelPart, Animation animation, float wheelRotation);
+    void car$playSoundLoop(AbstractTickableSoundInstance loop, Level level);
+    void car$displaySpeed(float speed);
+    void car$setOffsets(double[] offsets);
+    double[] car$getOffsets();
+    default float car$getWheelRotationAmount() {
+        return 8.5f * car$getSpeed();
+    }
+
+    Fluid car$getFluid();
 
     boolean car$isStarted();
     boolean car$isStarting();
@@ -22,6 +35,8 @@ public interface ICarInvoker{
     boolean car$isLeft();
     boolean car$isRight();
 
+    void car$updateSounds();
+    void car$initTemperature();
     void car$setBattery(int level);
     void car$centerCar();
     void car$setHealth(float health);
@@ -30,21 +45,16 @@ public interface ICarInvoker{
     void car$setStarting(boolean starting, boolean playFailSound);
     void car$updateControls(boolean forward, boolean backward, boolean left, boolean right, Player player);
     void car$rotateWheels(float deltaRot, float rotSpeed, float speed, float turnMod);
-    void car$displaySpeed(float speed);
-    void car$playSoundLoop(AbstractTickableSoundInstance loop, Level level);
 
     int car$getFuel();
-    default int car$getMaxFuel(){
-        return ServerConfig.modernMaxFuel.get();
-    }
     int car$getBattery();
     int car$getMaxBattery();
     int car$getEfficiency(Fluid fluid);
+    default int car$getMaxFuel(){
+        return ServerConfig.modernMaxFuel.get();
+    }
 
     float car$getHealth();
-    default float car$getMaxHealth(){
-        return 100f;
-    }
     float car$getTemperature();
     float car$getSpeed();
     float car$getMaxSpeed();
@@ -52,14 +62,15 @@ public interface ICarInvoker{
     float car$getWheelRotation(float partialTick);
     float car$getBatterySoundPitchLevel();
     float car$getAcceleration();
+    default float car$getMaxHealth(){
+        return 100f;
+    }
     default float car$getPitch(){
         return 1f + Math.abs(car$getSpeed()) / (car$getMaxSpeed() * ServerConfig.onroadSpeed.get().floatValue());
     }
-    default SoundEvent car$getEngineSound(){
-        return RefueledRegistry.ENGINE.get();
-    }
+
     default float car$getMaxRotationSpeed(){
-        return 6f / 3f;
+        return 3f * sizeFactor.floatValue();
     }
     default float car$getMinRotationSpeed(){
         return ServerConfig.modernMaxRotation.get().floatValue();
@@ -68,16 +79,12 @@ public interface ICarInvoker{
         return ServerConfig.modernRamDamage.get().floatValue();
     }
 
-    default float car$getWheelRotationAmount() {
-        return ((25.5f / 2f) * 0.6f) * car$getSpeed(); // 25.5 is the wheel diameter, 0.6 is scale factor
-    }
-
     default double[] car$getExhaust(int rand){
-        double radius = Math.sqrt((2.2D - 1D) * (2.2D - 1D) + (0.6D - 0) * (0.6D - 0));                             // calculates distance from entity center to exhaust point
-        double pointDist = Math.sqrt((2.2D - (1D + radius)) * (2.2D - (1D + radius)) + (0.6D - 0) * (0.6D - 0));    // calculates distance from exhaust point to current entity viewing point
+        double radius = Math.sqrt((1d + (1.8d * sizeFactor) - 1D) * (1d + (1.8d * sizeFactor) - 1d) + (sizeFactor - 0) * (sizeFactor - 0));                             // calculates distance from entity center to exhaust point
+        double pointDist = Math.sqrt((1d + (1.8d * sizeFactor) - (1D + radius)) * (1d + (1.8d * sizeFactor) - (1d + radius)) + (sizeFactor - 0) * (sizeFactor - 0));    // calculates distance from exhaust point to current entity viewing point
         double angle = 2 * Math.asin(0.5 * pointDist / radius);
 
-        return new double[]{radius, angle, 0.06D};
+        return new double[]{radius, angle, sizeFactor * 0.1f};
     }
 
     default double[] car$getDismountLocations(int offset, AABB carBB, AABB playerBB){
@@ -94,16 +101,15 @@ public interface ICarInvoker{
     default Vec3[] car$getSeatPositions(){
         Vec3[] seatPos = new Vec3[4];
 
-        seatPos[0] = new Vec3(0.6 * 0.6, 0.3 * 0.6, -0.2 * 0.9);
-        seatPos[1] = new Vec3(-0.6 * 0.6, 0.3 * 0.6, -0.2 * 0.9);
-        seatPos[2] = new Vec3(0.6 * 0.6, 0.3 * 0.6, -2.0 * 0.9);
-        seatPos[3] = new Vec3(-0.6 * 0.6, 0.3 * 0.6, -2.0 * 0.9);
+        seatPos[0] = new Vec3(0.65 * sizeFactor, 0.3 * sizeFactor, 0);
+        seatPos[1] = new Vec3(-0.65 * sizeFactor, 0.3 * sizeFactor, 0);
+        seatPos[2] = new Vec3(0.65 * sizeFactor, 0.3 * sizeFactor, -2.3 * sizeFactor);
+        seatPos[3] = new Vec3(-0.65 * sizeFactor, 0.3 * sizeFactor, -2.3 * sizeFactor);
 
         return seatPos;
     }
 
-    Fluid car$getFluid();
-
-    void car$updateSounds();
-    void car$initTemperature();
+    default SoundEvent car$getEngineSound(){
+        return RefueledRegistry.ENGINE.get();
+    }
 }

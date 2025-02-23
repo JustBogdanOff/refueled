@@ -8,23 +8,25 @@
   "mixins": [
     "accessor.IBiomeTempInvoke",
     "accessor.IDmgSourceInvoke",
-    "accessor.IHeightAccess",
     "accessor.IEntityAccess",
+    "accessor.IHeightAccess",
     "car.CarHitboxMixin",
-    "car.CarSpawnMixin",
     "car.CarMixin",
-    "car.CarMixin$ModernMixin",
+    "car.CarMixin$BikeMixin",
     "car.CarMixin$ClassicMixin",
-    "car.CarMixin$TruckMixin",
-    "car.CarMixin$SUVMixin",
+    "car.CarMixin$ModernMixin",
     "car.CarMixin$SportMixin",
-    "car.CarMixin$BikeMixin"
+    "car.CarMixin$SUVMixin",
+    "car.CarMixin$TruckMixin",
+    "car.CarSpawnMixin"
   ],
   "client": [
+    "accessor.IBlockBehaviourAccess",
     "accessor.ICameraInvoke",
     "car.client.AnimationMixin",
     "car.client.CarClientMixin",
     "car.client.CarModelMixin",
-    "car.client.CarRenderMixin"
+    "car.client.CarRenderMixin",
+    "car.client.PlayerAnimMixin"
   ]
 }

@@ -1,5 +1,6 @@
 package bogdan.refueled.mixin.car;
 
+import bogdan.refueled.common.accessors.ICarInvoker;
 import org.spongepowered.asm.mixin.Mixin;
 import com.dragn0007.dragnvehicles.registry.VehicleRegistry;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,7 +17,7 @@ public abstract class CarHitboxMixin {
             index = 0
     )
     private static float changeHitboxWidth(float original){
-        return original * 0.6f;
+        return original * ICarInvoker.sizeFactor.floatValue();
     }
 
     @ModifyArg(
@@ -28,6 +29,6 @@ public abstract class CarHitboxMixin {
             index = 1
     )
     private static float changeHitboxHeight(float original){
-        return original * 0.6f;
+        return original * ICarInvoker.sizeFactor.floatValue();
     }
 }

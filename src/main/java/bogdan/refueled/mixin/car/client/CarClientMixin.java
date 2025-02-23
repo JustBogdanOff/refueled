@@ -21,13 +21,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 
-import static bogdan.refueled.Utils.car$isSoundPlaying;
+import static bogdan.refueled.Utils.*;
 
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
 public abstract class CarClientMixin extends Entity implements ICarInvoker {
@@ -147,5 +145,16 @@ public abstract class CarClientMixin extends Entity implements ICarInvoker {
         }
 
         car$startedLast = car$isStarted();
+    }
+
+    @Unique
+    public double[] car$offsets = new double[3];
+
+    public void car$setOffsets(double[] offsets){
+        car$offsets = offsets;
+    }
+
+    public double[] car$getOffsets(){
+        return car$offsets;
     }
 }

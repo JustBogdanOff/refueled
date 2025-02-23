@@ -34,10 +34,7 @@ public abstract class Utils {
     }
 
     public static boolean isInBounds(float number, float bound, float tolerance) {
-        if (number > bound - tolerance && number < bound + tolerance) {
-            return true;
-        }
-        return false;
+        return number > bound - tolerance && number < bound + tolerance;
     }
 
     public static float subtractToZero(float num, float sub) {

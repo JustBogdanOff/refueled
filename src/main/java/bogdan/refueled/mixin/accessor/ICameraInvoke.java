@@ -1,6 +1,7 @@
 package bogdan.refueled.mixin.accessor;
 
 import net.minecraft.client.Camera;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
@@ -10,5 +11,8 @@ public interface ICameraInvoke {
     void invokeMove(double pDistanceOffset, double pVerticalOffset, double pHorizontalOffset);
 
     @Invoker("getMaxZoom")
-    double invokeMaxZoom(double pStartingDistance);
+    double invokeGetMaxZoom(double pStartingDistance);
+
+    @Invoker("setPosition")
+    void invokeSetPosition(Vec3 pos);
 }

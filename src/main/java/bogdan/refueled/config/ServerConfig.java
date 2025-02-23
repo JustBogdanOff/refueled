@@ -11,7 +11,6 @@ public class ServerConfig {
     private static final ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
     public static final ForgeConfigSpec SPEC;
 
-
     public static final ForgeConfigSpec.DoubleValue modernStepHeight;
     public static final ForgeConfigSpec.DoubleValue modernRamDamage;
     public static final ForgeConfigSpec.DoubleValue modernFuelEff;
@@ -62,7 +61,7 @@ public class ServerConfig {
     public static final ForgeConfigSpec.BooleanValue explodeOnDeath;
 
     static {
-        builder.push("car");
+        builder.push("refueled");
             builder.push("vehicles");
                 builder.push("modern");
                     modernStepHeight = builder
