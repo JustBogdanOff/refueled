@@ -14,7 +14,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public abstract class RefueledLoop extends AbstractTickableSoundInstance {
 
-    protected Entity car;
+    protected final Entity car;
 
     public RefueledLoop(Entity car, SoundEvent event, SoundSource category) {
         super(event, category, SoundInstance.createUnseededRandom());
@@ -36,9 +36,7 @@ public abstract class RefueledLoop extends AbstractTickableSoundInstance {
 
     @Override
     public void tick() {
-        if (isStopped()) {
-            return;
-        }
+        if (isStopped())  return;
 
         if (!car.isAlive()) {
             setDonePlaying();

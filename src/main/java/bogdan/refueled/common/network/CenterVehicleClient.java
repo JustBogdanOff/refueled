@@ -1,8 +1,9 @@
 package bogdan.refueled.common.network;
 
 import bogdan.refueled.RefueledMain;
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -38,20 +39,28 @@ public class CenterVehicleClient {
 
     @OnlyIn(Dist.CLIENT)
     private void handleOnClient(){
-        Player player = Minecraft.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
+        if(player == null){
+            RefueledMain.LOGGER.error("Unable to process packet because client player is null");
+            return;
+        }
+
         Player driver = player.level().getPlayerByUUID(uuid);
+        if(driver == null){
+            RefueledMain.LOGGER.error("Could not center vehicle because it's driver is null");
+            return;
+        }
+
         if (!driver.getUUID().equals(uuid)) {
-            RefueledMain.LOGGER.error("The UUID of the sender was not equal to the packet UUID");
+            RefueledMain.LOGGER.error("Mismatched sender and packet UUIDs");
             return;
         }
 
         Entity car = driver.getVehicle();
-        if(!isCar(car)) {
-            return;
-        }
+        if(!isCar(car))  return;
 
         if(driver.equals(car.getControllingPassenger())){
-            ((ICarInvoker) car).car$centerCar();
+            ((IVehicleAccess) car).refuel$centerCar();
         }
     }
 }

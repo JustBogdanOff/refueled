@@ -1,7 +1,7 @@
 package bogdan.refueled.common.network;
 
 import bogdan.refueled.RefueledMain;
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -37,19 +37,19 @@ public class VehicleStarting {
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         ServerPlayer player = supplier.get().getSender();
-        // Here we are server side
+        if(player == null){
+            RefueledMain.LOGGER.error("null packet sender");
+            return false;
+        }
         if (!player.getUUID().equals(uuid)) {
-            RefueledMain.LOGGER.error("Mismatching sender and packet UUIDs");
+            RefueledMain.LOGGER.error("Mismatched sender and packet UUIDs");
             return false;
         }
         Entity car = player.getVehicle();
-        if(!isCar(car)) {
-            return false;
-        }
+        if(!isCar(car)) return false;
 
-        if (player.equals(car.getControllingPassenger())) {
-            ((ICarInvoker) car).car$setStarting(start, playFailSound);
-        }
+        if (player.equals(car.getControllingPassenger()))
+            ((IVehicleAccess) car).refuel$setStarting(start, playFailSound);
         return true;
     }
 }

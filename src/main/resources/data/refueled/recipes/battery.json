@@ -1,0 +1,28 @@
+{
+  "type": "crafting_shaped",
+  "category": "misc",
+  "show_notification": true,
+  "pattern": [
+    "I C",
+    "RDR",
+    "DDD"
+  ],
+  "result": {
+    "item": "refueled:battery"
+  },
+  "key": {
+    "I": {
+      "tag": "forge:ingots/iron"
+    },
+    "C": {
+      "tag": "forge:ingots/copper"
+    },
+    "R": {
+      "item": "minecraft:redstone_torch"
+    },
+    "D": [
+      {"item": "minecraft:deepslate"},
+      {"item": "minecraft:cobbled_deepslate"}
+    ]
+  }
+}

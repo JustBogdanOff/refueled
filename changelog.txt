@@ -1,0 +1,15 @@
+- Added fuel siphoning, achievable by any item modded fluid container
+- Added the canister, able to hold a bucket of any fluid
+- Added the battery, with a max capacity of 4000 FE
+- Updated the list configs so that they actually work
+- Road blocks server config now takes an additional value to each entry, representing the speed multiplier. Replaces the old global on-road multiplier
+- Added a repair items config and more
+- Compacted vehicle stats config into arrays of 6
+- Smoothed out the sloping system
+- Added a reminder message telling how to start the vehicle and open the gui
+- Updated the internal GUI
+- Implemented a new GUI for the truck's external 'truck bed' inventory, allowing for 72 slots of storage
+- No laws against nauseated driving, but no benefits either
+- Motorcycle no longer crashes when sloping against 2 block high obstacles
+- Ramming into entities now knocks them back
+- Vehicles now have their battery actually drained from while driving

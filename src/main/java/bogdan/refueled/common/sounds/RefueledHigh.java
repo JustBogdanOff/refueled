@@ -1,6 +1,6 @@
 package bogdan.refueled.common.sounds;
 
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -13,18 +13,12 @@ public class RefueledHigh extends RefueledLoop {
 
     @Override
     public void tick() {
-        pitch = ((ICarInvoker) car).car$getPitch();
+        pitch = ((IVehicleAccess) car).refuel$getPitch();
         super.tick();
     }
 
     @Override
     public boolean shouldStopSound() {
-        if (((ICarInvoker) car).car$getSpeed() == 0F) {
-            return true;
-        } else if (!((ICarInvoker) car).car$isStarted()) {
-            return true;
-        }
-
-        return false;
+        return ((IVehicleAccess) car).refuel$getSpeed() == 0 || !((IVehicleAccess) car).refuel$isStarted();
     }
 }

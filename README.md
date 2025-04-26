@@ -9,8 +9,9 @@ Adds a fueling system to [DragN's&nbsp;Valiant&nbsp;Vehicles](https://www.cursef
 - Smaller vehicles
 - More realistic vehicle controls
 - Fueling and battery system
-- On wall and entity collision mechanics 
-<br> &emsp;&emsp;\+ an explosion on vehicle death
+- + 2 new items to go along with it
+- On wall and entity collision mechanics
 - Exhaust particles
-- And many configurable parameters
+- Many configurable parameters
+- And much more
 

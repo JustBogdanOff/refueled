@@ -8,11 +8,11 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(Camera.class)
 public interface ICameraInvoke {
     @Invoker("move")
-    void invokeMove(double pDistanceOffset, double pVerticalOffset, double pHorizontalOffset);
+    void cam$move(double pDistanceOffset, double pVerticalOffset, double pHorizontalOffset);
 
     @Invoker("getMaxZoom")
-    double invokeGetMaxZoom(double pStartingDistance);
+    double cam$getMaxZoom(double pStartingDistance);
 
     @Invoker("setPosition")
-    void invokeSetPosition(Vec3 pos);
+    void cam$setPosition(Vec3 pos);
 }

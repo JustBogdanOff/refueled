@@ -1,6 +1,6 @@
 package bogdan.refueled.mixin.car.client;
 
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import com.dragn0007.dragnvehicles.Animation;
 import com.dragn0007.dragnvehicles.vehicle.car.CarModel;
 import com.dragn0007.dragnvehicles.vehicle.classic.ClassicModel;
@@ -40,7 +40,7 @@ public abstract class CarModelMixin{
             )
     )
     private void refueled$redirectFrontAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3, @Coerce Object car, float partialTick){
-        ((ICarInvoker) (Object) animation).car$animate(modelPart, animation, ((ICarInvoker) car).car$getWheelRotation(partialTick));
+        ((IVehicleAccess) (Object) animation).refuel$animate(modelPart, animation, ((IVehicleAccess) car).refuel$getWheelRotation(partialTick));
     }
 
     @Redirect(
@@ -53,7 +53,7 @@ public abstract class CarModelMixin{
             )
     )
     private void refueled$redirectBackAnim(ModelPart modelPart, Animation animation, float irrelevantFloat, float irrelevantFloat2, float irrelevantFloat3, @Coerce Object car, float partialTick){
-        ((ICarInvoker) (Object) animation).car$animate(modelPart, animation, ((ICarInvoker) car).car$getWheelRotation(partialTick));
+        ((IVehicleAccess) (Object) animation).refuel$animate(modelPart, animation, ((IVehicleAccess) car).refuel$getWheelRotation(partialTick));
     }
 
     @ModifyArg(

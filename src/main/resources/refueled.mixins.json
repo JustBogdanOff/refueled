@@ -6,10 +6,11 @@
   "refmap": "refueled.mixins.refmap.json",
   "minVersion": "0.8",
   "mixins": [
-    "accessor.IBiomeTempInvoke",
-    "accessor.IDmgSourceInvoke",
+    "accessor.IBiomeAccess",
+    "accessor.IDmgSourceAccess",
     "accessor.IEntityAccess",
     "accessor.IHeightAccess",
+    "accessor.ILevelAccess",
     "car.CarHitboxMixin",
     "car.CarMixin",
     "car.CarMixin$BikeMixin",
@@ -21,12 +22,13 @@
     "car.CarSpawnMixin"
   ],
   "client": [
+    "ClientPacketListenerMixin",
+    "PlayerAnimMixin",
     "accessor.IBlockBehaviourAccess",
     "accessor.ICameraInvoke",
     "car.client.AnimationMixin",
     "car.client.CarClientMixin",
     "car.client.CarModelMixin",
-    "car.client.CarRenderMixin",
-    "car.client.PlayerAnimMixin"
+    "car.client.CarRenderMixin"
   ]
 }

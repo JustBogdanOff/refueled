@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 @Mixin(DamageSources.class)
-public interface IDmgSourceInvoke {
+public interface IDmgSourceAccess {
     @Invoker("source")
     DamageSource invokeSource(ResourceKey<DamageType> damageType);
 }

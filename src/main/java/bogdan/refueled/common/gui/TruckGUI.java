@@ -1,79 +1,49 @@
 package bogdan.refueled.common.gui;
 
 import bogdan.refueled.RefueledRegistry;
-import bogdan.refueled.common.accessors.IVehicleAccess;
+import com.dragn0007.dragnvehicles.vehicle.truck.Truck;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import org.jetbrains.annotations.NotNull;
 
-import static bogdan.refueled.Utils.getRepairItemData;
-
-public class CarGUI extends AbstractContainerMenu {
-
+public class TruckGUI extends AbstractContainerMenu {
     private final Container inventory, playerInventory;
-    public final Entity car;
+    public final Truck truck;
 
-    public CarGUI(int id, Entity car, Inventory playerInventory) {
-        super(RefueledRegistry.CAR_GUI.get(), id);
+    public TruckGUI(int id, Entity truck, Inventory playerInv) {
+        super(RefueledRegistry.TRUCK_GUI.get(), id);
+        this.truck = (Truck) truck;
+        this.inventory = this.truck.inventory;
+        this.playerInventory = playerInv;
 
-        this.car = car;
-        this.inventory = ((IVehicleAccess) car).refuel$getContainer();
-        this.playerInventory = playerInventory;
-        int numRows = inventory.getContainerSize() / 8;
-
-        for (int  j = 0; j < numRows; j++) {
-            for (int k = 0; k < 8; k++) {
-                addSlot(new Slot(inventory, 3 + k + j * 8, 26 + k * 18, 66 + j * 18));
-            }
-        }
-
-        addSlot(new Slot(inventory, 0, 8, 66){
-            @Override
-            public boolean mayPlace(@NotNull ItemStack stack) {
-                return stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent() && !(stack.getItem() instanceof BucketItem);
-            }
-        });
-        addSlot(new Slot(inventory, 1, 8, 84){
-            @Override
-            public boolean mayPlace(@NotNull ItemStack stack) {
-                return stack.getItem().equals(Items.REDSTONE) || stack.getCapability(ForgeCapabilities.ENERGY).isPresent();
-            }
-        });
-        addSlot(new Slot(inventory, 2, 8, 102){
-            @Override
-            public boolean mayPlace(@NotNull ItemStack stack) {
-                return getRepairItemData(stack) != null;
-            }
-        });
+        for(int i = 0; i < inventory.getContainerSize(); i++)
+            addSlot(new Slot(inventory, i, 152, 18)); // Stacks all the slots in the 1st row on the 9th slot
 
         addPlayerInventorySlots();
     }
+
 
     private void addPlayerInventorySlots() {
         if (playerInventory != null) {
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 9; j++) {
-                    addSlot(new Slot(playerInventory, j + i * 9 + 9, 8 + j * 18, 134 + i * 18));
+                    addSlot(new Slot(playerInventory, j + i * 9 + 9, 8 + j * 18, 140 + i * 18));
                 }
             }
 
             for (int k = 0; k < 9; k++) {
-                addSlot(new Slot(playerInventory, k, 8 + k * 18, 192));
+                addSlot(new Slot(playerInventory, k, 8 + k * 18, 198));
             }
         }
     }
 
     @Override
-    @NotNull
-    public ItemStack quickMoveStack(@NotNull Player playerIn, int index) {
+    public @NotNull ItemStack quickMoveStack(@NotNull Player player, int index) {
         ItemStack itemstack = ItemStack.EMPTY;
         Slot slot = slots.get(index);
 
@@ -101,7 +71,7 @@ public class CarGUI extends AbstractContainerMenu {
     @Override
     public boolean stillValid(@NotNull Player player) {
         if (inventory == null) {
-            return true;
+            return false;
         }
         return inventory.stillValid(player);
     }

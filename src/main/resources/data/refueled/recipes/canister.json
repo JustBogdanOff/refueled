@@ -1,0 +1,21 @@
+{
+  "type": "crafting_shaped",
+  "category": "misc",
+  "show_notification": true,
+  "pattern": [
+    "A  ",
+    " B ",
+    "   "
+  ],
+  "result": {
+    "item": "refueled:canister"
+  },
+  "key": {
+    "A": {
+      "tag": "forge:ingots/iron"
+    },
+    "B": {
+      "item": "minecraft:bucket"
+    }
+  }
+}

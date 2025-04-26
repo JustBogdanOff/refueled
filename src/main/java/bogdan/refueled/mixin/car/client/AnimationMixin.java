@@ -1,20 +1,17 @@
 package bogdan.refueled.mixin.car.client;
 
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import com.dragn0007.dragnvehicles.Animation;
 import net.minecraft.client.model.geom.ModelPart;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
-import org.spongepowered.asm.mixin.Unique;
 
 import static bogdan.refueled.Utils.mod;
 
 @Mixin(Animation.class)
-public abstract class AnimationMixin implements ICarInvoker {
-
+public abstract class AnimationMixin implements IVehicleAccess {
     @Mutable
-    @Unique
-    public void car$animate(ModelPart modelPart, Animation animation, float wheelRotation) {
+    public void refuel$animate(ModelPart modelPart, Animation animation, float wheelRotation) {
         float t = mod(wheelRotation, animation.length);
         int i = 0;
 

@@ -9,10 +9,12 @@ public class ClientConfig {
 
     public static final ForgeConfigSpec.DoubleValue carZoom;
     public static final ForgeConfigSpec.DoubleValue carVolume;
-    public static final ForgeConfigSpec.BooleanValue thirdPersonCameraEnter;
     public static final ForgeConfigSpec.BooleanValue temperatureFahrenheit;
     public static final ForgeConfigSpec.BooleanValue speedImperial;
     public static final ForgeConfigSpec.BooleanValue speedDisplay;
+    public static final ForgeConfigSpec.BooleanValue displayInUnits;
+    public static final ForgeConfigSpec.IntValue pinnedType;
+    public static final ForgeConfigSpec.BooleanValue reminderMessage;
 
     static {
         builder.push("cars");
@@ -23,10 +25,6 @@ public class ClientConfig {
         carVolume = builder
                 .comment("How loud the sound from the vehicles should be")
                 .defineInRange("car_volume", 1d, 0, 1d);
-
-        thirdPersonCameraEnter = builder
-                .comment("Whether to switch to 3rd person camera when entering a vehicle")
-                .define("third_person_camera_enter", true);
 
         temperatureFahrenheit = builder
                 .comment("Whether to display temperature as Fahrenheit")
@@ -39,6 +37,19 @@ public class ClientConfig {
         speedImperial = builder
                 .comment("If [speed_display] is enabled, to display speed in miles per hour")
                 .define("speed_imperial", false);
+
+        displayInUnits = builder
+                .comment("Whether vehicle information in the gui should be display in percentages or units")
+                .define("unit_display", false);
+
+        pinnedType = builder
+                .comment("Which stat's level should be shown as default in the meter bar of the vehicles' GUI")
+                .comment("0 - None, 1 - Fuel, 2 - Health, 3 - Battery, 4 - Temperature")
+                .defineInRange("pinned_type", 0, 0, 4);
+
+        reminderMessage = builder
+                .comment("Whether the player should be reminded how to start or open the vehicle's GUI")
+                .define("reminder", true);
 
         builder.pop();
         SPEC = builder.build();

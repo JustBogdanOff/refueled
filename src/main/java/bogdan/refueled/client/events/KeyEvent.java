@@ -1,7 +1,7 @@
-package bogdan.refueled.common.events;
+package bogdan.refueled.client.events;
 
 import bogdan.refueled.RefueledMain;
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.common.network.VehicleGUI;
 import bogdan.refueled.common.network.VehicleStarting;
 import bogdan.refueled.common.network.CenterVehicle;
@@ -33,7 +33,7 @@ public class KeyEvent {
             return;
         }
         if (player.equals(car.getControllingPassenger())) {
-            ((ICarInvoker) car).car$updateControls(Minecraft.getInstance().options.keyUp.isDown(), Minecraft.getInstance().options.keyDown.isDown(), Minecraft.getInstance().options.keyLeft.isDown(), Minecraft.getInstance().options.keyRight.isDown(), player);
+            ((IVehicleAccess) car).refuel$updateControls(Minecraft.getInstance().options.keyUp.isDown(), Minecraft.getInstance().options.keyDown.isDown(), Minecraft.getInstance().options.keyLeft.isDown(), Minecraft.getInstance().options.keyRight.isDown(), player);
 
             if (RefueledMain.START_KEY.isDown()) {
                 if (!wasStartPressed) {

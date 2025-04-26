@@ -1,8 +1,10 @@
 package bogdan.refueled;
 
 import bogdan.refueled.client.gui.CarGUIScreen;
-import bogdan.refueled.common.events.KeyEvent;
-import bogdan.refueled.common.events.RenderEvent;
+import bogdan.refueled.client.events.KeyEvent;
+import bogdan.refueled.client.events.RenderEvent;
+import bogdan.refueled.client.gui.TruckGUIScreen;
+import bogdan.refueled.server.PlayerLevelEvent;
 import bogdan.refueled.common.network.RefueledChannel;
 import bogdan.refueled.config.ClientConfig;
 import bogdan.refueled.config.ServerConfig;
@@ -30,7 +32,10 @@ public class RefueledMain {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public RefueledMain() {
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+
         RefueledRegistry.init(modEventBus);
         modEventBus.addListener(this::commonSetup);
 
@@ -38,13 +43,11 @@ public class RefueledMain {
             modEventBus.addListener(this::onRegisterKeybinds);
             modEventBus.addListener(this::clientSetup);
         });
-
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
-        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         RefueledChannel.register();
+        MinecraftForge.EVENT_BUS.register(new PlayerLevelEvent());
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -52,7 +55,10 @@ public class RefueledMain {
         MinecraftForge.EVENT_BUS.register(new KeyEvent());
         MinecraftForge.EVENT_BUS.register(new RenderEvent());
 
-        event.enqueueWork(() -> MenuScreens.register(RefueledRegistry.CAR_GUI.get(), CarGUIScreen::new));
+        event.enqueueWork(() -> {
+            MenuScreens.register(RefueledRegistry.CAR_GUI.get(), CarGUIScreen::new);
+            MenuScreens.register(RefueledRegistry.TRUCK_GUI.get(), TruckGUIScreen::new);
+        });
     }
 
     public static KeyMapping CAR_GUI_KEY, START_KEY, CENTER_KEY;

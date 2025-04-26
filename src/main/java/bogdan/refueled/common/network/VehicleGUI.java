@@ -1,10 +1,9 @@
 package bogdan.refueled.common.network;
 
 import bogdan.refueled.RefueledMain;
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -30,16 +29,18 @@ public class VehicleGUI {
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         ServerPlayer player = supplier.get().getSender();
-        // Here we are server side
-        if (!player.getUUID().equals(uuid)) {
-            RefueledMain.LOGGER.error("The UUID of the sender was not equal to the packet UUID");
+        if(player == null){
+            RefueledMain.LOGGER.error("Packet sender is null");
             return false;
         }
 
-        Entity car = player.getVehicle();
-        if(!isCar(car)) return false;
+        if (!player.getUUID().equals(uuid)) {
+            RefueledMain.LOGGER.error("Mismatched packet and sender UUID");
+            return false;
+        }
+        if(!isCar(player.getVehicle())) return false;
 
-        ((ICarInvoker) car).car$openCarGUI(player);
+        ((IVehicleAccess) player.getVehicle()).refuel$openGUI(player);
         return true;
     }
 }

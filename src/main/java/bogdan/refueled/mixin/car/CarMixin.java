@@ -1,12 +1,13 @@
 package bogdan.refueled.mixin.car;
 
 import bogdan.refueled.RefueledRegistry;
+import bogdan.refueled.common.gui.TruckGUI;
 import bogdan.refueled.common.network.*;
-import bogdan.refueled.common.accessors.ICarInvoker;
+import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.common.gui.CarGUI;
 import bogdan.refueled.config.ServerConfig;
-import bogdan.refueled.mixin.accessor.IBiomeTempInvoke;
-import bogdan.refueled.mixin.accessor.IDmgSourceInvoke;
+import bogdan.refueled.mixin.accessor.IBiomeAccess;
+import bogdan.refueled.mixin.accessor.IDmgSourceAccess;
 import bogdan.refueled.mixin.accessor.IEntityAccess;
 import bogdan.refueled.mixin.accessor.IHeightAccess;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
@@ -33,27 +34,30 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.*;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.DismountHelper;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
@@ -64,48 +68,244 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nonnull;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static bogdan.refueled.Utils.*;
+import static bogdan.refueled.server.PlayerLevelEvent.REFUELED_KEY;
 
+@Debug(export = true)
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
-public abstract class CarMixin extends Entity implements ICarInvoker, Container, IFluidHandler {
+public abstract class CarMixin extends Entity implements IVehicleAccess, MenuProvider {
     public CarMixin(EntityType<?> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
+    }
+
+    @Unique
+    private final static HashMap<String, Double> refuel$configData = new HashMap<>();
+
+    @Inject(
+            method = "<init>",
+            at = @At("TAIL")
+    )
+    private void refuel$addInit(EntityType<?> entityType, Level level, CallbackInfo ci) {
+        var type = List.of(Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class).indexOf(CarMixin.class);
+        refuel$configData.put("maxSpeed", ServerConfig.vehicleSpeed.get().get(type));
+        refuel$configData.put("maxReverseSpeed", ServerConfig.vehicleRevSpeed.get().get(type));
+        refuel$configData.put("acceleration", ServerConfig.vehicleAcc.get().get(type));
+        refuel$configData.put("stepHeight", ServerConfig.vehicleStepHeight.get().get(type));
+        refuel$configData.put("ramDamage", ServerConfig.vehicleRamDamage.get().get(type));
+        refuel$configData.put("fuelEfficiency", ServerConfig.vehicleFuelEff.get().get(type));
+        refuel$configData.put("minSteer", ServerConfig.vehicleSteering.get().get(type).get(0));
+        refuel$configData.put("maxSteer", ServerConfig.vehicleSteering.get().get(type).get(1));
+        refuel$configData.put("maxFuel", ServerConfig.vehicleFuel.get().get(type).doubleValue());
+        refuel$configData.put("battery", ServerConfig.vehicleBattery.get().get(type).doubleValue());
+
+        refuel$internalInventory = new SimpleContainer(27);
+        refuel$lazyFluid = LazyOptional.of(() -> new IFluidHandler() {
+            @Override
+            public int getTanks() {
+                return 1;
+            }
+
+            @Nonnull
+            @Override
+            public FluidStack getFluidInTank(int tank) {
+                return new FluidStack(refuel$getFluid(), refuel$getFuel());
+            }
+
+            @Override
+            public int getTankCapacity(int tank) {
+                return refuel$getMaxFuel();
+            }
+
+            @Override
+            public boolean isFluidValid(int tank, @Nonnull FluidStack stack) {
+                return getFuelEfficiency(stack.getFluid()) > 0;
+            }
+
+            @Override
+            public int fill(FluidStack resource, FluidAction action) {
+                Fluid fluid = refuel$getFluid();
+                if (resource == null || (fluid != Fluids.EMPTY && !resource.getFluid().equals(refuel$getFluid())) || getFuelEfficiency(resource.getFluid()) < 0) {
+                    return 0;
+                }
+                var fluidKey = ForgeRegistries.FLUIDS.getKey(resource.getFluid());
+                if (fluidKey == null) return 0;
+
+                int maxFuel = refuel$getMaxFuel();
+                int amount = Math.min(resource.getAmount(), maxFuel - refuel$getFuel());
+
+                if (action.execute()) {
+                    int i = refuel$getFuel() + amount;
+                    if (i > maxFuel) i = maxFuel;
+                    if (fluid == Fluids.EMPTY) entityData.set(refuel$FUEL_TYPE, fluidKey.toString());
+                    refuel$setFuel(i);
+                }
+
+                return amount;
+            }
+
+            @Nonnull
+            @Override
+            public FluidStack drain(FluidStack resource, FluidAction action) {
+                Fluid fluid = refuel$getFluid();
+                if (fluid == Fluids.EMPTY || resource == null || resource.getFluid() == null || !resource.getFluid().equals(fluid)) {
+                    return FluidStack.EMPTY;
+                }
+
+                return drain(resource.getAmount(), action);
+            }
+
+            @Nonnull
+            @Override
+            public FluidStack drain(int toDrain, FluidAction action) {
+                Fluid fluid = refuel$getFluid();
+                if (fluid == Fluids.EMPTY) return FluidStack.EMPTY;
+
+                int actuallyDrained = Math.min(toDrain, refuel$getFuel());
+                if (action.execute())
+                    refuel$setFuel(refuel$getFuel() - actuallyDrained);
+
+                return new FluidStack(fluid, actuallyDrained);
+            }
+        });
+        refuel$lazyEnergy = LazyOptional.of(() -> new IEnergyStorage() {
+            @Override
+            public int receiveEnergy(int amount, boolean simulate) {
+                if (amount < 0) {
+                    return 0;
+                }
+                int input = Math.min(refuel$getMaxBattery() - refuel$getBattery(), amount);
+                if (!simulate) {
+                    refuel$setBattery(refuel$getBattery() + input);
+                }
+
+                return input;
+            }
+
+            @Override
+            public int extractEnergy(int amount, boolean simulate) {
+                if (amount < 0) {
+                    return 0;
+                }
+                int extracted = Math.min(refuel$getBattery(), amount);
+                if (!simulate) {
+                    refuel$setBattery(refuel$getBattery() - extracted);
+                }
+                return extracted;
+            }
+
+            @Override
+            public int getEnergyStored() {
+                return refuel$getBattery();
+            }
+
+            @Override
+            public int getMaxEnergyStored() {
+                return refuel$getMaxBattery();
+            }
+
+            @Override
+            public boolean canExtract() {
+                return true;
+            }
+
+            @Override
+            public boolean canReceive() {
+                return true;
+            }
+        });
+    }
+
+    /*
+     * Any references to this abstract CarMixin class gets replaced with a class reference to the currently mix-ined class
+     * i.e: Current mixined class is 'Truck.class'
+     * then CarMixin.this, CarMixin.class -> Truck.this, Truck.class
+     */
+
+    /**
+     * todo:
+     *     - Implement a way to keep the vehicles locked
+     *     - model custom slot and 2 states, one with key and other without
+     *     - render the cars glovebox locked (disabled slots)
+     *     - Add a gas station block and tile entity
+     *     - add a way to pickup the vehicles
+     *     - Add 2 collision PartEntity hitboxes to front and back of the vehicles
+     *     - update the sloping system block collection
+     **/
+
+    @Inject(
+            method = "interact*",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void refuel$injectSiphon(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
+        if (isCar(player.getItemInHand(hand).getItem()) || player.getItemInHand(hand).getItem() instanceof BucketItem || (player.getItemInHand(hand).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent() && !player.isShiftKeyDown())) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        if (player.isShiftKeyDown() && player.getItemInHand(hand).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) {
+            IFluidHandlerItem otherHandler = player.getItemInHand(hand).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
+            IFluidHandler handler = this.getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
+            FluidStack fluidStack = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
+                    otherFluidStack = otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
+
+            // If there's anything in the otherHandler
+            if (!otherFluidStack.isEmpty()) {
+                // and if there's any space left in our handler
+                if (handler.fill(new FluidStack(fluidStack, Integer.MAX_VALUE), IFluidHandler.FluidAction.SIMULATE) > 0) {
+                    otherHandler.drain(handler.fill(otherFluidStack, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
+                    cir.setReturnValue(InteractionResult.sidedSuccess(level().isClientSide));
+                }
+                // otherwise assume it's full and drain
+                else {
+                    handler.drain(otherHandler.fill(fluidStack, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
+                    cir.setReturnValue(InteractionResult.sidedSuccess(level().isClientSide));
+                }
+            }
+            // If the otherHandler is empty and our handler contains anything
+            else if (!fluidStack.isEmpty()) {
+                handler.drain(otherHandler.fill(fluidStack, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
+                cir.setReturnValue(InteractionResult.sidedSuccess(level().isClientSide));
+            } else cir.setReturnValue(InteractionResult.FAIL);
+        }
     }
 
     @Shadow(remap = false)
     protected abstract Vec3 calcOffset(double x, double y, double z);
 
     @Override
-    public void positionRider(Entity entity, MoveFunction moveFunction) {
+    public void positionRider(@NotNull Entity entity, @NotNull MoveFunction moveFunction) {
         int i = this.getPassengers().indexOf(entity);
-        entity.setPos(this.calcOffset(car$getSeatPositions()[i].x, car$getSeatPositions()[i].y, car$getSeatPositions()[i].z));
+        entity.setPos(this.calcOffset(refuel$getSeatPositions()[i].x, refuel$getSeatPositions()[i].y, refuel$getSeatPositions()[i].z));
 
         float sizeMod = (Entity) this instanceof Motorcycle ? sizeFactor.floatValue() * 1.33f : sizeFactor.floatValue(),
                 offset = entity.getDimensions(Pose.SITTING).width * 0.5f * (1f - sizeMod);
         AABB oldBB = entity.getBoundingBox();
+        // Legs take up 37.5% of the model, however the bounding box is only 96% of the actual model scaled down to 93.75%
         entity.setBoundingBox(new AABB(
-                oldBB.minX + offset, oldBB.minY + entity.getBbHeight() * 0.3d * sizeMod, oldBB.minZ + offset, // Legs are tucked up, so 30% gone from the bottom
-                oldBB.maxX - offset, oldBB.maxY - entity.getBbHeight() * (1d - sizeMod), oldBB.maxZ - offset
-            ).move(new Vec3(0, entity.getBbHeight() * 0.05 * sizeMod, 0))
+                        oldBB.minX + offset, oldBB.minY + entity.getBbHeight() * (0.375 * 0.9375) * sizeMod, oldBB.minZ + offset,
+                        oldBB.maxX - offset, oldBB.maxY - entity.getBbHeight() * (1d - sizeMod), oldBB.maxZ - offset
+                )
         );
         ((IHeightAccess) entity).setEyeHeight(entity.getEyeHeight(Pose.SITTING) * sizeMod);
 
-        entity.setYRot(entity.getYRot() + car$deltaRotation);
-        entity.setYHeadRot(entity.getYHeadRot() + this.car$deltaRotation);
-        car$applyYawToEntity(entity);
+        entity.setYRot(entity.getYRot() + refuel$deltaRotation);
+        entity.setYHeadRot(entity.getYHeadRot() + this.refuel$deltaRotation);
+        //refuel$applyYawToEntity(entity);
     }
 
     @Override
     public void onPassengerTurned(@NotNull Entity entityToUpdate) {
-        car$applyYawToEntity(entityToUpdate);
+        refuel$applyYawToEntity(entityToUpdate);
     }
 
     @Unique
-    public void car$applyYawToEntity(Entity entityToUpdate) {
+    public void refuel$applyYawToEntity(Entity entityToUpdate) {
         entityToUpdate.setYBodyRot(getYRot());
         float f = Mth.wrapDegrees(entityToUpdate.getYRot() - getYRot());
         float f1 = Mth.clamp(f, -130.0F, 130.0F);
@@ -114,73 +314,65 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         entityToUpdate.setYHeadRot(entityToUpdate.getYRot());
     }
 
-    @Unique
-    public Container car$internalInventory;
-
-    @Unique
-    public FluidStack car$fluidInventory;
-
-    @Inject(
-            method = "<init>",
-            at = @At("TAIL")
-    )
-    private void car$addInit(EntityType<?> entityType, Level level, CallbackInfo ci) {
-        this.car$internalInventory = new SimpleContainer(24);
-        this.car$fluidInventory = FluidStack.EMPTY;
-    }
 
     // ENTITYDATA DEFINERS
 
     @Unique
     private static final EntityDataAccessor<String>
-            car$FUEL_TYPE = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.STRING);
+            refuel$FUEL_TYPE = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.STRING);
     @Unique
     private static final EntityDataAccessor<Float>
-            car$TEMPERATURE = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.FLOAT),
-            car$SPEED = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.FLOAT);
+            refuel$TEMPERATURE = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.FLOAT),
+            refuel$SPEED = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.FLOAT);
     @Unique
     private static final EntityDataAccessor<Integer>
-            car$FUEL_AMOUNT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT),
-            car$BATTERY_LEVEL = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT),
-            car$STARTING_TIME = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT);
+            refuel$FUEL_AMOUNT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT),
+            refuel$BATTERY_LEVEL = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT),
+            refuel$STARTING_TIME = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.INT);
     @Unique
     private static final EntityDataAccessor<Boolean>
-            car$STARTING = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
-            car$STARTED = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
-            car$FORWARD = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
-            car$BACKWARD = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
-            car$LEFT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
-            car$RIGHT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN);
+            refuel$STARTING = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
+            refuel$STARTED = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
+            refuel$FORWARD = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
+            refuel$BACKWARD = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
+            refuel$LEFT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN),
+            refuel$RIGHT = SynchedEntityData.defineId(CarMixin.class, EntityDataSerializers.BOOLEAN);
 
     @Inject(
             method = "addAdditionalSaveData",
             at = @At("TAIL")
     )
-    private void car$saveDataToNBT(CompoundTag compoundTag, CallbackInfo ci) {
-        compoundTag.putInt("fuel", car$getFuel());
-        compoundTag.putString("fuel_type", car$getFuelType());
-        compoundTag.putFloat("engine_temp", this.entityData.get(car$TEMPERATURE));
-        compoundTag.putInt("battery_level", this.entityData.get(car$BATTERY_LEVEL));
-        saveInventory(compoundTag, "int_inventory", car$internalInventory);
-        if (!car$fluidInventory.isEmpty()) {
-            compoundTag.put("fluid_inventory", car$fluidInventory.writeToNBT(new CompoundTag()));
-        }
+    private void refuel$saveDataToNBT(CompoundTag tag, CallbackInfo ci) {
+        tag.putFloat("temperature", entityData.get(refuel$TEMPERATURE));
+        tag.putInt("energy", entityData.get(refuel$BATTERY_LEVEL));
+        saveInventory(tag, "internalInventory", refuel$internalInventory);
+        tag.put("Fluid", new FluidStack(refuel$getFluid(), refuel$getFuel()).writeToNBT(new CompoundTag()));
+
+        tag.remove("fluid_inventory");
+        tag.remove("engine_temp");
+        tag.remove("battery_level");
+        tag.remove("int_inventory");
     }
 
     @Inject(
             method = "readAdditionalSaveData",
             at = @At("TAIL")
     )
-    private void car$readDataFromNBT(CompoundTag compoundTag, CallbackInfo ci) {
-        car$setFuel(compoundTag.getInt("fuel"));
-        if (compoundTag.contains("fuel_type")) {
-            car$setFuelType(compoundTag.getString("fuel_type"));
-        }
-        this.entityData.set(car$TEMPERATURE, compoundTag.getFloat("engine_temp"));
-        this.entityData.set(car$BATTERY_LEVEL, compoundTag.getInt("battery_level"));
-        readInventory(compoundTag, "int_inventory", car$internalInventory);
-        if (compoundTag.contains("fluid_inventory")) {
-            car$fluidInventory = FluidStack.EMPTY;
+    private void refuel$readDataFromNBT(CompoundTag tag, CallbackInfo ci) {
+        if(tag.contains("temperature"))
+            entityData.set(refuel$TEMPERATURE, tag.getFloat("temperature"));
+        if(tag.contains("energy"))
+            entityData.set(refuel$BATTERY_LEVEL, tag.getInt("energy"));
+        if(tag.contains("internalInventory"))
+            readInventory(tag, "internalInventory", refuel$internalInventory);
+
+        if(tag.contains("Fluid")){
+            var temp = FluidStack.loadFluidStackFromNBT(tag.getCompound("Fluid"));
+            var fluidKey = ForgeRegistries.FLUIDS.getKey(temp.getFluid());
+            if(temp != FluidStack.EMPTY && fluidKey != null){
+                entityData.set(refuel$FUEL_AMOUNT, temp.getAmount());
+                entityData.set(refuel$FUEL_TYPE, fluidKey.toString());
+            }
         }
     }
 
@@ -188,22 +380,27 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             method = "defineSynchedData",
             at = @At("TAIL")
     )
-    private void car$syncData(CallbackInfo ci) {
-        this.entityData.define(car$FUEL_AMOUNT, 0);
-        this.entityData.define(car$FUEL_TYPE, "");
-        this.entityData.define(car$TEMPERATURE, 0f);
-        this.entityData.define(car$BATTERY_LEVEL, 0);
-        this.entityData.define(car$STARTING_TIME, 0);
-        this.entityData.define(car$STARTING, false);
-        this.entityData.define(car$STARTED, false);
-        this.entityData.define(car$SPEED, 0f);
-        this.entityData.define(car$FORWARD, false);
-        this.entityData.define(car$BACKWARD, false);
-        this.entityData.define(car$LEFT, false);
-        this.entityData.define(car$RIGHT, false);
+    private void refuel$syncData(CallbackInfo ci) {
+        entityData.define(refuel$FUEL_TYPE, "");
+        entityData.define(refuel$SPEED, 0f);
+        entityData.define(refuel$TEMPERATURE, 0f);
+        entityData.define(refuel$FUEL_AMOUNT, 0);
+        entityData.define(refuel$BATTERY_LEVEL, 0);
+        entityData.define(refuel$STARTING_TIME, 0);
+        entityData.define(refuel$STARTING, false);
+        entityData.define(refuel$STARTED, false);
+        entityData.define(refuel$FORWARD, false);
+        entityData.define(refuel$BACKWARD, false);
+        entityData.define(refuel$LEFT, false);
+        entityData.define(refuel$RIGHT, false);
     }
 
-    @SuppressWarnings("unchecked")
+    @Unique
+    public LazyOptional<IFluidHandler> refuel$lazyFluid;
+
+    @Unique
+    public LazyOptional<IEnergyStorage> refuel$lazyEnergy;
+
     @Inject(
             remap = false,
             method = "getCapability",
@@ -213,15 +410,37 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             ),
             cancellable = true
     )
-    private <T> void car$addFluidCapability(@NotNull Capability<T> cap, @Nullable Direction side, CallbackInfoReturnable<LazyOptional<T>> cir) {
+    private void refuel$addFluidCapability(@NotNull Capability<?> cap, @Nullable Direction side, CallbackInfoReturnable<LazyOptional<?>> cir) {
         if (this.isAlive() && cap == ForgeCapabilities.FLUID_HANDLER) {
-            cir.setReturnValue(LazyOptional.of(() -> (T) this));
+            cir.setReturnValue(refuel$lazyFluid.cast());
+        }
+        if (this.isAlive() && cap == ForgeCapabilities.ENERGY) {
+            cir.setReturnValue(refuel$lazyEnergy.cast());
         }
     }
 
-    @Override
-    public LivingEntity getControllingPassenger() {
-        return car$getDriver();
+    @Inject(
+            remap = false,
+            method = "invalidateCaps",
+            at = @At("TAIL")
+    )
+    private void refuel$removeCap(CallbackInfo ci) {
+        if (refuel$lazyFluid != null) {
+            refuel$lazyFluid.invalidate();
+        }
+        if (refuel$lazyEnergy != null) {
+            refuel$lazyEnergy.invalidate();
+        }
+    }
+
+    @Unique
+    public Container refuel$internalInventory;
+
+    @Shadow(remap = false)
+    public SimpleContainer inventory;
+
+    public Container refuel$getContainer() {
+        return refuel$internalInventory;
     }
 
     @Shadow(remap = false)
@@ -229,77 +448,60 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     private static EntityDataAccessor<Float> HEALTH;
 
     @Unique
-    public float car$getSpeed() {
-        return this.entityData.get(car$SPEED);
+    public float refuel$getSpeed() {
+        return entityData.get(refuel$SPEED);
     }
 
     @Unique
-    public void car$setSpeed(float speed) {
-        this.entityData.set(car$SPEED, speed);
+    public void refuel$setSpeed(float speed) {
+        entityData.set(refuel$SPEED, speed);
     }
 
 
     // HEALTH
 
     @Unique
-    public float car$getHealth() {
-        return this.entityData.get(HEALTH);
+    public float refuel$getHealth() {
+        return entityData.get(HEALTH);
+    }
+
+    public void refuel$setHealth(float health) {
+        if (health > refuel$getMaxHealth()) {
+            health = refuel$getMaxHealth();
+        } else if (health < 0)
+            this.hurt(level().damageSources().generic(), health);
+
+        entityData.set(HEALTH, health);
     }
 
     @Unique
-    public void car$setHealth(float health) {
-        if (health > 100F) {
-            health = car$getMaxHealth();
-        } else if (health < 0) {
-            this.kill();
-        }
-        this.entityData.set(HEALTH, health);
-    }
-
-    @Unique
-    public void car$addDamage(float damage) {
-        this.hurt(damageSources().generic(), damage);
+    public void refuel$addDamage(float damage) {
+        refuel$setHealth(refuel$getHealth() - damage);
     }
 
 
     // FUEL
 
     @Unique
-    public int car$getFuel() {
-        return this.entityData.get(car$FUEL_AMOUNT);
+    public int refuel$getFuel() {
+        return this.entityData.get(refuel$FUEL_AMOUNT);
     }
 
     @Unique
-    public void car$setFuel(int fuel) {
-        this.entityData.set(car$FUEL_AMOUNT, fuel);
-    }
-
-    @Unique
-    public String car$getFuelType() {
-        return this.entityData.get(car$FUEL_TYPE);
-    }
-
-    @Unique
-    public void car$setFuelType(String fluid) {
-        if (fluid == null) {
-            fluid = "";
+    public void refuel$setFuel(int fuel) {
+        if (fuel < 0) {
+            fuel = 0;
+            entityData.set(refuel$FUEL_TYPE, "");
         }
-        this.entityData.set(car$FUEL_TYPE, fluid);
+        fuel = Math.min(fuel, refuel$getMaxFuel());
+        entityData.set(refuel$FUEL_AMOUNT, fuel);
     }
 
-    @Unique
-    public void car$setFuelType(Fluid fluid) {
-        car$setFuelType(ForgeRegistries.FLUIDS.getKey(fluid).toString());
-    }
+    public Fluid refuel$getFluid() {
+        String fuelType = entityData.get(refuel$FUEL_TYPE);
+        if (fuelType.isEmpty()) return Fluids.EMPTY;
 
-
-    @Nullable
-    public Fluid car$getFluid() {
-        String fuelType = car$getFuelType();
-        if (fuelType == null || fuelType.isEmpty()) {
-            return null;
-        }
-
+        //noinspection removal
         return ForgeRegistries.FLUIDS.getValue(new ResourceLocation(fuelType));
     }
 
@@ -307,275 +509,100 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     // BATTERY
 
     @Unique
-    public int car$getBattery() {
-        return this.entityData.get(car$BATTERY_LEVEL);
+    public int refuel$getBattery() {
+        return entityData.get(refuel$BATTERY_LEVEL);
     }
 
     @Unique
-    public int car$getMaxBattery() {
-        return 1000;
-    }
-
-    @Unique
-    public void car$setBattery(int level) {
+    public void refuel$setBattery(int level) {
         if (level < 0) {
             level = 0;
-        } else if (level > car$getMaxBattery()) {
-            level = car$getMaxBattery();
+        } else if (level > refuel$getMaxBattery()) {
+            level = refuel$getMaxBattery();
         }
-        this.entityData.set(car$BATTERY_LEVEL, level);
+        entityData.set(refuel$BATTERY_LEVEL, level);
     }
 
 
     // ENGINE TEMPERATURE
 
-    @Unique
-    public float car$getTemperature() {
-        return this.entityData.get(car$TEMPERATURE);
+    public float refuel$getTemperature() {
+        return entityData.get(refuel$TEMPERATURE);
     }
 
     @Unique
-    public void car$setTemperature(float temp) {
-        this.entityData.set(car$TEMPERATURE, temp);
-    }
-
-
-    @Override
-    public int getTanks() {
-        return 1;
-    }
-
-    @Nonnull
-    @Override
-    public FluidStack getFluidInTank(int tank) {
-        Fluid fluid = car$getFluid();
-        if (fluid == null) {
-            return new FluidStack(Fluids.LAVA, car$getFuel());
-        } else {
-            return new FluidStack(fluid, car$getFuel());
-        }
-    }
-
-    @Override
-    public int getTankCapacity(int tank) {
-        return car$getMaxFuel();
-    }
-
-    @Override
-    public boolean isFluidValid(int tank, @Nonnull FluidStack stack) {
-        return true;
-    }
-
-    @Override
-    public int fill(FluidStack resource, FluidAction action) {
-        if (resource == null || !car$isValidFuel(resource.getFluid())) {
-            return 0;
-        }
-
-        if (car$getFluid() != null && car$getFuel() > 0 && !resource.getFluid().equals(car$getFluid())) {
-            return 0;
-        }
-
-        int amount = Math.min(resource.getAmount(), car$getMaxFuel() - car$getFuel());
-
-        if (action.execute()) {
-            int i = car$getFuel() + amount;
-            if (i > car$getMaxFuel()) {
-                i = car$getMaxFuel();
-            }
-            car$setFuel(i);
-            car$setFuelType(resource.getFluid());
-        }
-
-        return amount;
-    }
-
-    @Nonnull
-    @Override
-    public FluidStack drain(FluidStack resource, FluidAction action) {
-        if (resource == null) {
-            return FluidStack.EMPTY;
-        }
-
-        if (resource.getFluid() == null || !resource.getFluid().equals(car$getFluid())) {
-            return FluidStack.EMPTY;
-        }
-
-        return drain(resource.getAmount(), action);
-    }
-
-    @Nonnull
-    @Override
-    public FluidStack drain(int maxDrain, FluidAction action) {
-        Fluid fluid = car$getFluid();
-        int totalAmount = car$getFuel();
-
-        if (fluid == null) {
-            return FluidStack.EMPTY;
-        }
-
-        int amount = Math.min(maxDrain, totalAmount);
-
-
-        if (action.execute()) {
-            int newAmount = totalAmount - amount;
-
-
-            if (newAmount <= 0) {
-                car$setFuelType((String) null);
-                car$setFuel(0);
-            } else {
-                car$setFuel(newAmount);
-            }
-        }
-
-        return new FluidStack(fluid, amount);
-    }
-
-    @Override
-    public int getContainerSize() {
-        return car$internalInventory.getContainerSize();
-    }
-
-    @Override
-    public ItemStack getItem(int index) {
-        return car$internalInventory.getItem(index);
-    }
-
-    @Override
-    public ItemStack removeItem(int index, int count) {
-        return car$internalInventory.removeItem(index, count);
-    }
-
-    @Override
-    public ItemStack removeItemNoUpdate(int index) {
-        return car$internalInventory.removeItemNoUpdate(index);
-    }
-
-    @Override
-    public void setItem(int index, ItemStack stack) {
-        car$internalInventory.setItem(index, stack);
-    }
-
-    @Override
-    public int getMaxStackSize() {
-        return car$internalInventory.getMaxStackSize();
-    }
-
-    @Override
-    public void setChanged() {
-        car$internalInventory.setChanged();
-    }
-
-    @Override
-    public boolean stillValid(Player player) {
-        return car$internalInventory.stillValid(player);
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return car$internalInventory.isEmpty();
-    }
-
-    @Override
-    public void startOpen(Player player) {
-        car$internalInventory.startOpen(player);
-    }
-
-    @Override
-    public void stopOpen(Player player) {
-        car$internalInventory.stopOpen(player);
-    }
-
-    @Override
-    public boolean canPlaceItem(int index, ItemStack stack) {
-        return car$internalInventory.canPlaceItem(index, stack);
-    }
-
-    @Override
-    public void clearContent() {
-        car$internalInventory.clearContent();
+    private void refuel$setTemperature(float temp) {
+        entityData.set(refuel$TEMPERATURE, temp);
     }
 
     @Unique
-    private void car$fuelTick() {
-        int fuel = car$getFuel();
-        int tickFuel = car$getEfficiency(car$getFluid());
-        if (tickFuel <= 0) {
-            return;
-        }
-        if (fuel > 0 && car$isAccelerating()) {
-            if (tickCount % tickFuel == 0) {
-                car$removeFuel(1);
-            }
-        } else if (fuel > 0 && car$isStarted()) {
-            if (tickCount % (tickFuel * 100) == 0) {
-                car$removeFuel(1);
-            }
+    private void refuel$fuelTick() {
+        int fuel = refuel$getFuel();
+        if (fuel == 0) return;
+
+        double efficiency = refuel$getEfficiency(refuel$getFluid());
+        if (efficiency <= 0) return;
+
+        double frequency = Math.min(1, efficiency);
+        int density = Mth.floor(1 / Math.min(1, efficiency));
+
+        if (fuel > 0 && ((refuel$isForward() || refuel$isBackward()) && !horizontalCollision && refuel$isStarted())) {
+            if (tickCount % Mth.floor(frequency) == 0)
+                refuel$setFuel(refuel$getFuel() - density);
+        } else if (fuel > 0 && refuel$isStarted()) {
+            if (tickCount % Mth.floor(frequency * 100) == 0)
+                refuel$setFuel(refuel$getFuel() - density);
         }
     }
 
     @Unique
-    private void car$removeFuel(int amount) {
-        int fuel = car$getFuel();
-        int newFuel = fuel - amount;
-        car$setFuel(Math.max(newFuel, 0));
+    public boolean refuel$isStarted() {
+        return this.entityData.get(refuel$STARTED);
     }
 
     @Unique
-    public boolean car$isAccelerating() {
-        boolean b = (car$isForward() || car$isBackward()) && !horizontalCollision;
-        return b && car$isStarted();
-    }
+    private static boolean refuel$carStopped = false, refuel$carStarted = false;
 
-    @Unique
-    public boolean car$isStarted() {
-        return this.entityData.get(car$STARTED);
-    }
-
-    @Unique
-    private static boolean car$carStopped = false, car$carStarted = false;
-
-    @Unique
-    public void car$setStarting(boolean starting, boolean playFailSound) {
+    public void refuel$setStarting(boolean starting, boolean playFailSound) {
         if (starting) {
-            if (car$getBattery() <= 0) {
+            if (refuel$getBattery() <= 0) {
                 return;
             }
-            if (car$isStarted()) {
-                car$setStarted(false, true, false);
-                car$carStopped = true;
+            if (refuel$isStarted()) {
+                refuel$setStarted(false, true, false);
+                refuel$carStopped = true;
                 return;
             }
         } else {
-            if (car$carStarted || car$carStopped) {
+            if (refuel$carStarted || refuel$carStopped) {
                 // TO prevent car from making stop start sound after releasing the starter key
-                car$carStopped = false;
-                car$carStarted = false;
+                refuel$carStopped = false;
+                refuel$carStarted = false;
                 return;
             }
             if (playFailSound) {
-                if (car$getBattery() > 0) {
-                    car$playFailSound();
+                if (refuel$getBattery() > 0) {
+                    refuel$playFailSound();
                 }
             }
         }
-        this.entityData.set(car$STARTING, starting);
+        this.entityData.set(refuel$STARTING, starting);
     }
 
+    @SuppressWarnings("SameParameterValue")
     @Unique
-    public void car$setStarted(boolean started, boolean playStopSound, boolean playFailSound) {
+    private void refuel$setStarted(boolean started, boolean playStopSound, boolean playFailSound) {
         if (!started && playStopSound) {
-            car$playStopSound();
+            refuel$playStopSound();
         } else if (!started && playFailSound) {
-            car$playFailSound();
+            refuel$playFailSound();
         }
-        this.entityData.set(car$STARTED, started);
+        this.entityData.set(refuel$STARTED, started);
     }
 
     @Unique
-    public void car$playStopSound() {
-        if(!(level().isClientSide)) {
+    public void refuel$playStopSound() {
+        if (!(level().isClientSide)) {
             level().playSound(
                     null,
                     blockPosition().getX() + 0.5d,
@@ -590,8 +617,8 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public void car$playFailSound() {
-        if(!(level().isClientSide)) {
+    public void refuel$playFailSound() {
+        if (!(level().isClientSide)) {
             level().playSound(
                     null,
                     blockPosition().getX() + 0.5d,
@@ -600,14 +627,14 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
                     SoundEvents.FIRE_EXTINGUISH,
                     SoundSource.MASTER,
                     1f,
-                    1f + car$getBatterySoundPitchLevel()
+                    1f + refuel$getBatterySoundPitchLevel()
             );
         }
     }
 
     @Unique
-    public void car$playCrashSound() {
-        if(!level().isClientSide) {
+    public void refuel$playCrashSound() {
+        if (!level().isClientSide) {
             level().playSound(
                     null,
                     (double) blockPosition().getX() + 0.5D,
@@ -621,52 +648,45 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public float car$getModifier() {
-        BlockState state = getBlockStateOn();
+    public float refuel$getModifier() {
+        var multiplier = getRoadBlockMultiplier(getBlockStateOn());
+        if (multiplier > 0) return multiplier;
 
-        if (state.isAir() || isRoadBlock(state)) {
-            return ServerConfig.onroadSpeed.get().floatValue();
-        } else {
-            return ServerConfig.offroadSpeed.get().floatValue();
-        }
+        return ServerConfig.offroadSpeed.get().floatValue();
     }
 
     @Unique
-    public float car$getRollResistance() {
+    public float refuel$getRollResistance() {
         return 0.02F;
     }
 
-    @Shadow(remap = false)
-    @Final
-    private static float SPEED;
+    @Unique
+    public float refuel$deltaRotation = 0;
 
     @Unique
-    public float car$deltaRotation = 0;
-
-    @Unique
-    public void car$setForward(boolean forward) {
-        this.entityData.set(car$FORWARD, forward);
+    public void refuel$setForward(boolean forward) {
+        this.entityData.set(refuel$FORWARD, forward);
     }
 
     @Unique
-    public void car$setBackward(boolean backward) {
-        this.entityData.set(car$BACKWARD, backward);
+    public void refuel$setBackward(boolean backward) {
+        this.entityData.set(refuel$BACKWARD, backward);
     }
 
     @Unique
-    public void car$setLeft(boolean left) {
-        this.entityData.set(car$LEFT, left);
+    public void refuel$setLeft(boolean left) {
+        this.entityData.set(refuel$LEFT, left);
     }
 
     @Unique
-    public void car$setRight(boolean right) {
-        this.entityData.set(car$RIGHT, right);
+    public void refuel$setRight(boolean right) {
+        this.entityData.set(refuel$RIGHT, right);
     }
 
     @Unique
-    public Player car$getDriver() {
+    public Player refuel$getDriver() {
         List<Entity> passengers = getPassengers();
-        if (passengers.size() <= 0) {
+        if (passengers.isEmpty()) {
             return null;
         }
 
@@ -678,96 +698,120 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public boolean car$isForward() {
-        if (car$getDriver() == null || !car$canPlayerDriveCar(car$getDriver())) {
-            return false;
-        }
-        return entityData.get(car$FORWARD);
+    public boolean refuel$isForward() {
+        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && entityData.get(refuel$FORWARD);
     }
 
     @Unique
-    public boolean car$isBackward() {
-        if (car$getDriver() == null || !car$canPlayerDriveCar(car$getDriver())) {
-            return false;
-        }
-        return entityData.get(car$BACKWARD);
+    public boolean refuel$isBackward() {
+        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && entityData.get(refuel$BACKWARD);
     }
 
     @Unique
-    public boolean car$isLeft() {
-        if (car$getDriver() == null || !car$canPlayerDriveCar(car$getDriver())) {
-            return false;
-        }
-        return entityData.get(car$LEFT);
+    public boolean refuel$isLeft() {
+        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && entityData.get(refuel$LEFT);
     }
 
     @Unique
-    public boolean car$isRight() {
-        if (car$getDriver() == null || !car$canPlayerDriveCar(car$getDriver())) {
-            return false;
-        }
-        return this.entityData.get(car$RIGHT);
+    public boolean refuel$isRight() {
+        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && this.entityData.get(refuel$RIGHT);
     }
 
     @Unique
-    private boolean car$collidedLastTick;
+    private boolean refuel$collidedLastTick;
 
     @Unique
-    private void car$handleInput() {
+    private final boolean[] refuel$lastInputs = new boolean[4], refuel$lastTickInputs = new boolean[4];
+    @Unique
+    private boolean[] refuel$randomInputs = new boolean[2];
+
+    @Unique
+    private int[] refuel$drunkTicks = new int[4];
+
+    @Unique
+    private void refuel$handleInput() {
         if (!isVehicle()) {
-            car$setForward(false);
-            car$setBackward(false);
-            car$setLeft(false);
-            car$setRight(false);
+            refuel$setForward(false);
+            refuel$setBackward(false);
+            refuel$setLeft(false);
+            refuel$setRight(false);
         }
+        var nausea = refuel$getDriver() == null || !refuel$canPlayerDriveCar(refuel$getDriver()) ? null : refuel$getDriver().getEffect(MobEffects.CONFUSION);
+        int amp = -1;
+        if (nausea != null) {
+            amp = nausea.getAmplifier();
+            if (tickCount % (random.nextInt(amp) + 1) == 0) refuel$randomInputs = new boolean[]{
+                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 20) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 20))) == 0 ? random.nextBoolean() : refuel$isLeft(),
+                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 20) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 20))) == 0 ? random.nextBoolean() : refuel$isRight()
+            };
+        } else refuel$drunkTicks = new int[4];
+
         float turnMod = 1;
-        float maxSp = car$getMaxSpeed() * car$getModifier();
-        float maxBackSp = car$getMaxReverseSpeed() * car$getModifier();
+        float maxSp = refuel$getMaxSpeed() * refuel$getModifier(),
+                maxBackSp = refuel$getMaxReverseSpeed() * refuel$getModifier(),
+                speed = subtractToZero(refuel$getSpeed(), refuel$getRollResistance());
 
-        float speed = subtractToZero(car$getSpeed(), car$getRollResistance());
-
-        if (car$isForward()) {
-            if (speed <= maxSp) {
-                speed = Math.min(speed + car$getAcceleration(), maxSp);
+        if (amp == -1) {
+            if (refuel$isForward() && speed <= maxSp) speed = Math.min(speed + refuel$getAcceleration(), maxSp);
+            // if sober, proceed as normal
+            if (refuel$isBackward()) {
+                if (level().isClientSide) turnMod = -1;
+                if (speed >= -maxBackSp) speed = Math.max(speed - refuel$getAcceleration(), -maxBackSp);
             }
+        } else {
+            // FORWARD
+            if (refuel$isForward() != refuel$lastTickInputs[0]) refuel$drunkTicks[0] = 0;
+            if (refuel$drunkTicks[0] > amp) refuel$lastInputs[0] = refuel$isForward();
+            else refuel$drunkTicks[0]++;
+            if (refuel$lastInputs[0] && speed <= maxSp) speed = Math.min(speed + refuel$getAcceleration(), maxSp);
+            refuel$lastTickInputs[0] = refuel$isForward();
+
+            // BACKWARD
+            if (refuel$isBackward() != refuel$lastTickInputs[1]) refuel$drunkTicks[1] = 0;
+            if (refuel$drunkTicks[1] > amp) refuel$lastInputs[1] = refuel$isBackward();
+            else refuel$drunkTicks[1]++;
+            if (refuel$lastInputs[1]) {
+                if (level().isClientSide) turnMod = -1;
+                if (speed >= -maxBackSp) speed = Math.max(speed - refuel$getAcceleration(), -maxBackSp);
+            }
+            refuel$lastTickInputs[1] = refuel$isBackward();
         }
 
-        if (car$isBackward()) {
-            if (level().isClientSide) {
-                turnMod = -1;
-            }
-            if (speed >= -maxBackSp) {
-                speed = Math.max(speed - car$getAcceleration(), -maxBackSp);
-            }
-        }
-
-        car$setSpeed(speed);
+        refuel$setSpeed(speed);
 
         float rotationSpeed = 0;
         if (Math.abs(speed) > 0.02F) {
-            rotationSpeed = Mth.abs(car$getRotationModifier() / (float) Math.pow(speed, 2));
+            rotationSpeed = Mth.abs(refuel$getRotationModifier() / (float) Math.pow(speed, 2));
 
-            rotationSpeed = Mth.clamp(rotationSpeed, car$getMinRotationSpeed(), car$getMaxRotationSpeed());
+            rotationSpeed = Mth.clamp(rotationSpeed, refuel$getHighSpeedSteering(), refuel$getLowSpeedSteering());
         }
 
-        car$deltaRotation = 0;
+        refuel$deltaRotation = 0;
 
-        if (speed < 0) {
-            rotationSpeed = -rotationSpeed;
+        if (speed < 0) rotationSpeed = -rotationSpeed;
+
+        if (amp == -1) {
+            if (refuel$isLeft()) refuel$deltaRotation -= rotationSpeed;
+            if (refuel$isRight()) refuel$deltaRotation += rotationSpeed;
+        } else {
+            // LEFT
+            if (refuel$isLeft() != refuel$lastTickInputs[2]) refuel$drunkTicks[2] = 0;
+            if (refuel$drunkTicks[2] > amp) refuel$lastInputs[2] = refuel$randomInputs[0];
+            else refuel$drunkTicks[2]++;
+            if (refuel$lastInputs[2]) refuel$deltaRotation -= rotationSpeed;
+            refuel$lastTickInputs[2] = refuel$isLeft();
+
+            // RIGHT
+            if (refuel$isRight() != refuel$lastTickInputs[3]) refuel$drunkTicks[3] = 0;
+            if (refuel$drunkTicks[3] > amp) refuel$lastInputs[3] = refuel$randomInputs[1];
+            else refuel$drunkTicks[3]++;
+            if (refuel$lastInputs[3]) refuel$deltaRotation += rotationSpeed;
+            refuel$lastTickInputs[3] = refuel$isRight();
         }
 
-        if (car$isLeft()) {
-            car$deltaRotation -= rotationSpeed;
-        }
-        if (car$isRight()) {
-            car$deltaRotation += rotationSpeed;
-        }
+        if (level().isClientSide) refuel$rotateWheels(refuel$deltaRotation * turnMod, rotationSpeed, speed);
 
-        if(level().isClientSide){
-            car$rotateWheels(car$deltaRotation, rotationSpeed, speed, turnMod);
-        }
-
-        setYRot(getYRot() + car$deltaRotation);
+        setYRot(getYRot() + refuel$deltaRotation);
         float delta = Math.abs(getYRot() - yRotO);
         while (getYRot() > 180F) {
             setYRot(getYRot() - 360F);
@@ -779,121 +823,101 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         }
 
         if (horizontalCollision) {
-            if (level().isClientSide && !car$collidedLastTick) {
-                car$onCollision(speed);
-                car$collidedLastTick = true;
+            if (level().isClientSide && !refuel$collidedLastTick) {
+                refuel$onCollision(speed);
+                refuel$collidedLastTick = true;
             }
         } else {
-            setDeltaMovement(car$calculateMotionX(car$getSpeed(), getYRot()), getDeltaMovement().y, car$calculateMotionZ(car$getSpeed(), getYRot()));
-            if (level().isClientSide) {
-                car$collidedLastTick = false;
-            }
+            setDeltaMovement(refuel$calculateMotionX(refuel$getSpeed(), getYRot()), getDeltaMovement().y, refuel$calculateMotionZ(refuel$getSpeed(), getYRot()));
+            if (level().isClientSide) refuel$collidedLastTick = false;
         }
     }
 
-
-    @Shadow(remap = false)
-    public Vec3 lastClientPos;
-    @Shadow(remap = false)
-    private int lerpSteps;
     @Unique
-    private int car$timeToStart, car$timeSinceStarted;
-    @Shadow(remap = false)
-    private float targetYRot;
-    @Shadow(remap = false)
-    private double targetX, targetY, targetZ;
+    private int refuel$timeToStart, refuel$timeSinceStarted;
 
     @Override
     public void tick() {
-        this.lastClientPos = this.position();
-
+        if (level().isClientSide) {
+            refuel$updateLastYRot();
+            refuel$updateClientPos();
+            refuel$tickLerp();
+        }
         super.tick();
-        car$tickLerp();
 
         Runnable task;
-        while ((task = car$tasks.poll()) != null) {
+        while ((task = refuel$tasks.poll()) != null) {
             task.run();
         }
 
-        if (car$isStarted() && !car$canEngineStayOn()) {
-            car$setStarted(false);
+        if (refuel$isStarted() && !refuel$canEngineStayOn()) {
+            refuel$setStarted(false);
         }
 
-        car$updateGravity();
-        car$handleInput();
-
+        refuel$updateGravity();
+        refuel$handleInput();
         move(MoverType.SELF, getDeltaMovement());
+        if (level().isClientSide) refuel$updateWheelRotation();
 
-        car$updateWheelRotation();
+        if (isInLava() && tickCount % 2 == 0) refuel$addDamage(1);
+        if (refuel$isStarted() || getHP(this) < 1f) refuel$particles();
 
-        if (isInLava()) {
-            car$addDamage(1);
-        }
-
-        if (car$isStarted() || (car$getHealth() / car$getMaxHealth()) * 100f < 1f) {
-            car$particles();
-        }
-
-        car$fuelTick();
+        refuel$fuelTick();
+        refuel$checkSlots();
 
         if (level().isClientSide) {
-            car$displaySpeed(car$getSpeed());
-            car$updateSounds();
-            if (car$isStarted()) {
-                car$timeSinceStarted++;
-                if (tickCount % 2 == 0) { //How often particles will spawn
-                    car$spawnParticles(car$getSpeed() > 0.1F);
-                    car$spawnParticles(car$getSpeed() > 0.1F);
-                    if((Entity) this instanceof Motorcycle || (Entity) this instanceof SportCar){
-                        car$spawnParticles(car$getSpeed() > 0.1F);
-                        car$spawnParticles(car$getSpeed() > 0.1F);
+            refuel$displaySpeed(refuel$getSpeed());
+            refuel$updateSounds();
+            if (refuel$isStarted()) {
+                refuel$timeSinceStarted++;
+                if (tickCount % 2 == 0) {
+                    refuel$spawnParticles(refuel$getSpeed() > 0.1F);
+                    refuel$spawnParticles(refuel$getSpeed() > 0.1F);
+                    //noinspection ConstantValue,EqualsBetweenInconvertibleTypes
+                    if (CarMixin.class.equals(Motorcycle.class) || CarMixin.class.equals(SportCar.class)) {
+                        refuel$spawnParticles(refuel$getSpeed() > 0.1F);
+                        refuel$spawnParticles(refuel$getSpeed() > 0.1F);
                     }
                 }
             } else {
-                car$timeSinceStarted = 0;
+                refuel$timeSinceStarted = 0;
             }
+            refuel$angleTick();
             return;
         }
 
         // SERVER SIDE
-        if (car$isStarting()) {
-            if (tickCount % 2 == 0) {
-                car$setBattery(car$getBattery() - car$getBatteryUsage());
-            }
 
-            car$setStartingTime(car$getStartingTime() + 1);
-            if (car$getBattery() <= 0) {
-                car$setStarting(false, true);
+        if (refuel$isStarting()) {
+            refuel$setBattery(refuel$getBattery() - refuel$getBatteryUsage());
+
+            refuel$setStartingTime(refuel$getStartingTime() + 1);
+            if (refuel$getBattery() <= 0) {
+                refuel$setStarting(false, true);
             }
         } else {
-            car$setStartingTime(0);
+            refuel$setStartingTime(0);
         }
 
-        int time = car$getStartingTime();
-
-        if (time > 0) { // prevent always calling gettimetostart
-            if (car$timeToStart <= 0) {
-                car$timeToStart = car$getTimeToStart();
+        int time = refuel$getStartingTime();
+        if (time > 0) {
+            if (refuel$timeToStart <= 0) {
+                refuel$timeToStart = refuel$getTimeToStart();
             }
 
-            if (time > car$getTimeToStart()) {
-                car$startCarEngine();
-                car$timeToStart = 0;
+            if (time > refuel$getTimeToStart()) {
+                refuel$startCarEngine();
+                refuel$timeToStart = 0;
             }
         }
 
-        if (car$isStarted()) {
-            car$setStartingTime(0);
-            car$carStarted = true;
-            float speedPerc = car$getSpeed() / car$getMaxSpeed();
+        if (refuel$isStarted()) {
+            refuel$setStartingTime(0);
+            refuel$carStarted = true;
+            float speedPerc = refuel$getSpeed() / refuel$getMaxSpeed();
 
-            int chargingRate = (int) (speedPerc * 7F);
-            if (chargingRate < 5) {
-                chargingRate = 1;
-            }
-
-            if (tickCount % 20 == 0) {
-                car$setBattery(car$getBattery() + chargingRate);
+            if (tickCount % 4 == 0) {
+                refuel$setBattery(refuel$getBattery() + Mth.floor(speedPerc * 4 - (1 - speedPerc) * 2));
             }
         }
 
@@ -901,7 +925,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             return;
         }
 
-        float speedPerc = car$getSpeed() / car$getMaxSpeed();
+        float speedPerc = refuel$getSpeed() / refuel$getMaxSpeed();
 
         int tempRate = (int) (speedPerc * 10F) + 1;
 
@@ -911,72 +935,79 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
         float rate = tempRate * 0.2F + (random.nextFloat() - 0.5F) * 0.1F;
 
-        float temp = car$getTemperature();
-
-        float tempToReach = car$getTemperatureToReach();
+        float temp = refuel$getTemperature();
+        float tempToReach = refuel$getTemperatureToReach();
 
         if (isInBounds(temp, tempToReach, rate)) {
-            car$setTemperature(tempToReach);
+            refuel$setTemperature(tempToReach);
         } else {
             if (tempToReach < temp) {
                 rate = -rate;
             }
-            car$setTemperature(temp + rate);
+            refuel$setTemperature(temp + rate);
         }
+
+    }
+
+    public Vec3 refuel$getSeatPosition(Entity player) {
+        if (!this.getPassengers().contains(player)) return null;
+
+        return refuel$getSeatPositions()[this.getPassengers().indexOf(player)];
     }
 
     @Unique
-    private static double car$calculateMotionX(float speed, float rotationYaw) {
+    private static double refuel$calculateMotionX(float speed, float rotationYaw) {
         return Mth.sin(-rotationYaw * 0.017453292F) * speed;
     }
 
     @Unique
-    private static double car$calculateMotionZ(float speed, float rotationYaw) {
+    private static double refuel$calculateMotionZ(float speed, float rotationYaw) {
         return Mth.cos(rotationYaw * 0.017453292F) * speed;
     }
 
     @Unique
-    public void car$onCollision(float speed) {
+    public void refuel$onCollision(float speed) {
         if (level().isClientSide) {
             RefueledChannel.sendToServer(new VehicleCrash(this, speed));
         }
-        car$setSpeed(0.01F);
+        refuel$setSpeed(0.01F);
         setDeltaMovement(0D, getDeltaMovement().y, 0D);
 
-        float percSpeed = speed / car$getMaxSpeed();
+        float percSpeed = speed / refuel$getMaxSpeed();
 
         if (percSpeed > 0.7F) {
-            car$addDamage(percSpeed * 5);
-            car$playCrashSound();
+            refuel$addDamage(percSpeed * 5);
+            refuel$playCrashSound();
 
             if (percSpeed > 0.9F) {
-                car$addDamage(percSpeed * 5);
-                car$setStarted(false);
-                car$playStopSound();
+                refuel$addDamage(percSpeed * 5);
+                refuel$setStarted(false);
+                refuel$playStopSound();
             }
         }
     }
 
     @Unique
-    public void car$setStarted(boolean started) {
-        car$setStarting(false, false);
+    public void refuel$setStarted(boolean started) {
+        refuel$setStarting(false, false);
 
-        car$setStarted(started, true, false);
+        refuel$setStarted(started, true, false);
     }
 
 
     @Unique
-    public float car$getRotationModifier() {
+    public float refuel$getRotationModifier() {
         return 0.5F * 3f;
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     @Unique
-    public boolean car$canPlayerDriveCar(Player player) {
-        if (car$getFuel() <= 0) {
+    public boolean refuel$canPlayerDriveCar(Player player) {
+        if (refuel$getFuel() <= 0) {
             return false;
         }
 
-        if (player.equals(getControllingPassenger()) && car$isStarted()) {
+        if (player.equals(getControllingPassenger()) && refuel$isStarted()) {
             return true;
         } else if (isInWater() || isInLava()) {
             return false;
@@ -986,25 +1017,25 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public int car$getStartingTime() {
-        return this.entityData.get(car$STARTING_TIME);
+    public int refuel$getStartingTime() {
+        return this.entityData.get(refuel$STARTING_TIME);
     }
 
     @Unique
-    public void car$setStartingTime(int time) {
-        this.entityData.set(car$STARTING_TIME, time);
+    public void refuel$setStartingTime(int time) {
+        this.entityData.set(refuel$STARTING_TIME, time);
     }
 
     @Unique
-    public boolean car$isStarting() {
-        return this.entityData.get(car$STARTING);
+    public boolean refuel$isStarting() {
+        return this.entityData.get(refuel$STARTING);
     }
 
     @Unique
-    public int car$getTimeToStart() {
+    public int refuel$getTimeToStart() {
         int time = random.nextInt(10) + 5;
 
-        float temp = car$getTemperature();
+        float temp = refuel$getTemperature();
         if (temp < 0F) {
             time += 40;
         } else if (temp < 10F) {
@@ -1015,7 +1046,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             time += 5;
         }
 
-        float batteryPerc = ((float) car$getBattery() / (float) car$getMaxBattery());
+        float batteryPerc = ((float) refuel$getBattery() / (float) refuel$getMaxBattery());
 
         if (batteryPerc < 0.5F) {
             time += 20 + random.nextInt(10);
@@ -1023,13 +1054,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             time += 10 + random.nextInt(10);
         }
 
-        if (car$getHealth() < 5) {
+        if (refuel$getHealth() < 5) {
             time += random.nextInt(25) + 50;
-        } else if (car$getHealth() <= 10) {
+        } else if (refuel$getHealth() <= 10) {
             time += random.nextInt(15) + 30;
-        } else if (car$getHealth() <= 20) {
+        } else if (refuel$getHealth() <= 20) {
             time += random.nextInt(15) + 10;
-        } else if (car$getHealth() <= 50) {
+        } else if (refuel$getHealth() <= 50) {
             time += random.nextInt(10) + 5;
         }
 
@@ -1037,13 +1068,13 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public float car$getTemperatureToReach() {
-        float biomeTemp = car$getBiomeTemperatureCelsius();
+    public float refuel$getTemperatureToReach() {
+        float biomeTemp = refuel$getBiomeTemperatureCelsius();
 
-        if (!car$isStarted()) {
+        if (!refuel$isStarted()) {
             return biomeTemp;
         }
-        float optimalTemp = car$getOptimalTemperature();
+        float optimalTemp = refuel$getOptimalTemperature();
 
         if (biomeTemp > 45F) {
             optimalTemp = 100F;
@@ -1054,47 +1085,47 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public float car$getBiomeTemperatureCelsius() {
+    public float refuel$getBiomeTemperatureCelsius() {
         Biome biome = level().getBiome(blockPosition()).value();
-        return (((IBiomeTempInvoke) (Object) biome).invokeGetTemperature(blockPosition()) - 0.3f) * 30f;
+        return (((IBiomeAccess) (Object) biome).invokeGetTemperature(blockPosition()) - 0.3f) * 30f;
     }
 
     @Unique
-    public float car$getOptimalTemperature() {
+    public float refuel$getOptimalTemperature() {
         return 90F;
     }
 
     @Unique
-    public int car$getBatteryUsage() {
+    public int refuel$getBatteryUsage() {
         if (!ServerConfig.useBattery.get()) {
             return 0;
         }
 
-        float temp = car$getBiomeTemperatureCelsius();
+        float temp = refuel$getBiomeTemperatureCelsius();
         int baseUsage = 2;
         if (temp < 0F) {
             baseUsage += 2;
         } else if (temp < 15F) {
-            baseUsage += 1;
+            baseUsage++;
         }
         return baseUsage;
     }
 
     @Unique
-    public void car$startCarEngine() {
+    public void refuel$startCarEngine() {
         Player player = (Player) getControllingPassenger();
-        if (player != null && car$canStartCarEngine()) {
-            car$setStarted(true);
+        if (player != null && refuel$canStartCarEngine()) {
+            refuel$setStarted(true);
         }
     }
 
     @Unique
-    public boolean car$canStartCarEngine() {
-        if (car$getFuel() <= 0) {
+    public boolean refuel$canStartCarEngine() {
+        if (refuel$getFuel() <= 0) {
             return false;
         }
 
-        if (car$getHealth() <= 0) {
+        if (refuel$getHealth() <= 0) {
             return false;
         }
 
@@ -1102,20 +1133,20 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Override
-    public Vec3 getDismountLocationForPassenger(LivingEntity entity) {
+    public @NotNull Vec3 getDismountLocationForPassenger(@NotNull LivingEntity entity) {
         Direction direction = getMotionDirection();
         if (direction.getAxis() == Direction.Axis.Y) {
             return super.getDismountLocationForPassenger(entity);
         }
+
         int[][] offsets = DismountHelper.offsetsForDirection(direction);
         AABB bb = entity.getLocalBoundsForPose(Pose.STANDING);
-        AABB carBB = getBoundingBox();
         for (int[] offset : offsets) {
             int i = this.getPassengers().size();
             Vec3 dismountPos = new Vec3(
-                getX() + car$getDismountLocations(offset[0], carBB, bb)[i],
-                getY(),
-                getZ() + car$getDismountLocations(offset[1], carBB, bb)[i]);
+                    getX() + refuel$getDismountLocations(offset[0], getBbWidth(), entity.getBbWidth())[i],
+                    getY(),
+                    getZ() + refuel$getDismountLocations(offset[1], getBbWidth(), entity.getBbWidth())[i]);
 
             double y = level().getBlockFloorHeight(new BlockPos((int) dismountPos.x, (int) dismountPos.y, (int) dismountPos.z));
             if (DismountHelper.isBlockFloorValid(y)) {
@@ -1127,79 +1158,60 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         return super.getDismountLocationForPassenger(entity);
     }
 
-    @Shadow(remap = false)
-    public SimpleContainer inventory;
-
     @Override
-    public boolean canBeHitByProjectile(){
+    public boolean canBeHitByProjectile() {
         return this.isAlive();
     }
 
     @Override
-    public boolean hurt(DamageSource damageSource, float damage) {
-        if (this.isInvulnerable() || level().isClientSide || !isAlive()) {
-            return false;
-        }
+    public boolean hurt(@NotNull DamageSource damageSource, float damage) {
+        if (level().isClientSide || isInvulnerable() || !isAlive()) return false;
 
-        if (damageSource.getEntity() instanceof Player player) {
-            if (getPassengers().stream().anyMatch(player::equals)) {
-                return false;
-            }
-        }
+        if (damageSource.getEntity() != null && getPassengers().stream().anyMatch(damageSource.getEntity()::equals)) return false;
 
-        if (!this.level().isClientSide && !this.isRemoved()) {
+        if (!this.isRemoved()) {
             this.markHurt();
             this.gameEvent(GameEvent.ENTITY_DAMAGE);
-            float health = car$getHealth() - damage;
-            car$setHealth(health);
 
-            if (health < 0) {
-                if(ServerConfig.explodeOnDeath.get()) {
-                    level().explode(this, new DamageSource(((IDmgSourceInvoke) level().damageSources()).invokeSource(RefueledRegistry.vehicleExplosion).typeHolder(), getControllingPassenger()), null, getX(), getY(), getZ(), 2f + 4f * ((float) car$getFuel() / (float) car$getMaxFuel()), false, Level.ExplosionInteraction.BLOCK);
+            var actualDamage = refuel$getHealth() - damage;
+            if (actualDamage <= 0) {
+                if (ServerConfig.explodeOnDeath.get()) {
+                    refuel$tasks.add(() -> level().explode(null, new DamageSource(((IDmgSourceAccess) level().damageSources()).invokeSource(RefueledRegistry.vehicleExplosion).typeHolder(), getControllingPassenger()), null, getX(), getY(), getZ(), 2f + 4f * ((float) refuel$getFuel() / (float) refuel$getMaxFuel()), false, Level.ExplosionInteraction.BLOCK));
                 }
-                Containers.dropContents(this.level(), this, this.inventory);
-                Containers.dropContents(this.level(), this, car$internalInventory);
+                Containers.dropContents(this.level(), this, inventory);
+                Containers.dropContents(this.level(), this, refuel$internalInventory);
                 this.kill();
             }
+            else refuel$setHealth(refuel$getHealth() - damage);
+
+            return true;
         }
-        return true;
+
+        return false;
     }
 
-    // Engine sound related stuff
-
     @Unique
-    public float car$getBatterySoundPitchLevel() {
+    public float refuel$getBatterySoundPitchLevel() {
+        int startLevel = refuel$getMaxBattery() / 3;
+        float basePitch = 1F - 0.002F * (float) refuel$getStartingTime();
+        if (refuel$getBattery() > startLevel) return basePitch;
 
-        int batteryLevel = car$getBattery();
-
-        int startLevel = car$getMaxBattery() / 3;
-
-        float basePitch = 1F - 0.002F * ((float) car$getStartingTime());
-
-        if (batteryLevel > startLevel) {
-            return basePitch;
-        }
-
-        int levelUnder = startLevel - batteryLevel;
-
-        float perc = (float) levelUnder / (float) startLevel;
-
+        float perc = (float) (startLevel - refuel$getBattery()) / (float) startLevel;
         return basePitch - (perc / 2.3F);
     }
 
     @Unique
-    private final BlockingQueue<Runnable> car$tasks = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Runnable> refuel$tasks = new LinkedBlockingQueue<>();
 
     @Override
-    public boolean canCollideWith(Entity entity) {
-        if (!level().isClientSide && ServerConfig.damageEntities.get() && entity instanceof LivingEntity && !getPassengers().contains(entity)) {
-            if (entity.getBoundingBox().intersects(getBoundingBox())) {
-                float altSpeed = car$getSpeed();
-
-                if (altSpeed > 0.35F) {
-                    float damage = altSpeed * car$getRamDamage();
-                    car$tasks.add(() -> entity.hurt(((IDmgSourceInvoke) level().damageSources()).invokeSource(RefueledRegistry.vehicleCollision), damage));
-                }
+    public boolean canCollideWith(@NotNull Entity entity) {
+        if (!level().isClientSide && ServerConfig.damageEntities.get() && entity instanceof LivingEntity mob && !getPassengers().contains(entity)) {
+            if (entity.getBoundingBox().intersects(getBoundingBox()) && refuel$getSpeed() > 0.35F) {
+                double damage = refuel$getSpeed() * refuel$getRamDamage();
+                refuel$tasks.add(() -> {
+                    mob.hurt(((IDmgSourceAccess) level().damageSources()).invokeSource(RefueledRegistry.vehicleCollision), (float) damage);
+                    mob.knockback((damage / refuel$getMaxSpeed()) / mob.getHealth(), getX() - mob.getX(), getZ() - mob.getZ());
+                });
             }
         }
 
@@ -1212,48 +1224,14 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         return (entity.canBeCollidedWith() || entity.isPushable()) && !isPassengerOfSameVehicle(entity);
     }
 
-
     @Unique
-    public float car$clientPitch;
-
-    @Unique
-    private void car$tickLerp() {
-        if (this.isControlledByLocalInstance()) {
-            this.lerpSteps = 0;
-            this.syncPacketPositionCodec(this.getX(), this.getY(), this.getZ());
-        }
-
-        if (this.lerpSteps > 0) {
-            double d0 = getX() + (targetX - getX()) / (double) lerpSteps;
-            double d1 = getY() + (targetY - getY()) / (double) lerpSteps;
-            double d2 = getZ() + (targetZ - getZ()) / (double) lerpSteps;
-            double d3 = Mth.wrapDegrees(targetYRot - (double) getYRot());
-            setYRot((float) ((double) getYRot() + d3 / (double) lerpSteps));
-            --lerpSteps;
-            setPos(d0, d1, d2);
-            setRot(getYRot(), getXRot());
-        }
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    @Override
-    public void lerpTo(double x, double y, double z, float yaw, float pitch, int posRotationIncrements, boolean teleport) {
-        this.targetX = x;
-        this.targetY = y;
-        this.targetZ = z;
-        this.targetYRot = yaw;
-        this.car$clientPitch = pitch;
-        this.lerpSteps = 10;
-    }
-
-    @Unique
-    public boolean car$canEngineStayOn() {
-        if (car$getFuel() <= 0 || isInLava() || car$getHealth() <= 0) {
+    public boolean refuel$canEngineStayOn() {
+        if (refuel$getFuel() <= 0 || isInLava() || refuel$getHealth() <= 0) {
             return false;
         }
 
         if (isInWater()) {
-            car$addDamage(25);
+            refuel$addDamage(25);
             return false;
         }
 
@@ -1261,7 +1239,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    private void car$updateGravity() {
+    private void refuel$updateGravity() {
         if (isNoGravity()) {
             setDeltaMovement(getDeltaMovement().x, 0D, getDeltaMovement().z);
             return;
@@ -1270,7 +1248,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public void car$spawnParticles(boolean driving) {
+    public void refuel$spawnParticles(boolean driving) {
         if (!level().isClientSide) {
             return;
         }
@@ -1278,20 +1256,20 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
         double lookAngle = getYRot() < 0 ? 360 + getYRot() : getYRot();
 
         int rand = random.nextInt(4);
-        double radius = car$getExhaust(rand)[0], angle = car$getExhaust(rand)[1];
+        double radius = refuel$getExhaust(rand)[0], angle = refuel$getExhaust(rand)[1];
 
         double offX = Math.sin(Math.toRadians(lookAngle)) + radius * Math.sin(angle + Math.toRadians(lookAngle)); // offX is equal to the vertical vector on a 2d plane
-        double offY = car$getExhaust(rand)[2]; // slightly elevate the exhaust
+        double offY = refuel$getExhaust(rand)[2]; // slightly elevate the exhaust
         double offZ = Math.cos(Math.toRadians(lookAngle)) * -1D - radius * Math.cos(angle + Math.toRadians(lookAngle)); // and for offZ, it's equal to the horizontal vector
 
 
         // Engine started smoke should only come 1 second after start and only if the
         // engine is colder than 50°C
-        if (car$timeSinceStarted > 0 && car$timeSinceStarted < 20 && car$getTemperature() < 50F) {
+        if (refuel$timeSinceStarted > 0 && refuel$timeSinceStarted < 20 && refuel$getTemperature() < 50F) {
             double speedX = lookVec.x * -0.1D;
             double speedZ = lookVec.z * -0.1D;
 
-            int health = (int) ((car$getHealth() / car$getMaxHealth()) * 100f);
+            int health = (int) ((refuel$getHealth() / refuel$getMaxHealth()) * 100f);
             int count = 1;
             double r = 0.1;
 
@@ -1306,22 +1284,22 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
                 r = 0.3;
             }
             for (int i = 0; i <= count; i++) {
-                car$spawnParticle(ParticleTypes.LARGE_SMOKE, offX, offY, offZ, speedX, speedZ, r);
+                refuel$spawnParticle(ParticleTypes.LARGE_SMOKE, offX, offY, offZ, speedX, speedZ, r);
             }
         } else if (driving) {
             double speedX = lookVec.x * -0.2D;
             double speedZ = lookVec.z * -0.2D;
-            car$spawnParticle(ParticleTypes.SMOKE, offX, offY, offZ, speedX, speedZ);
+            refuel$spawnParticle(ParticleTypes.SMOKE, offX, offY, offZ, speedX, speedZ);
         } else {
             double speedX = lookVec.x * -0.05D;
             double speedZ = lookVec.z * -0.05D;
-            car$spawnParticle(ParticleTypes.SMOKE, offX, offY, offZ, speedX, speedZ);
+            refuel$spawnParticle(ParticleTypes.SMOKE, offX, offY, offZ, speedX, speedZ);
         }
 
     }
 
     @Unique
-    private void car$spawnParticle(ParticleOptions particleTypes, double offX, double offY, double offZ, double speedX, double speedZ, double r) {
+    private void refuel$spawnParticle(ParticleOptions particleTypes, double offX, double offY, double offZ, double speedX, double speedZ, double r) {
         level().addParticle(particleTypes,
                 getX() + offX + (random.nextDouble() * r - r / 2D),
                 getY() + offY + (random.nextDouble() * r - r / 2D) + getBbHeight() / 8F,
@@ -1330,16 +1308,16 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    private void car$spawnParticle(ParticleOptions particleTypes, double offX, double offY, double offZ, double speedX, double speedZ) {
-        car$spawnParticle(particleTypes, offX, offY, offZ, speedX, speedZ, 0.1D);
+    private void refuel$spawnParticle(@SuppressWarnings("SameParameterValue") ParticleOptions particleTypes, double offX, double offY, double offZ, double speedX, double speedZ) {
+        refuel$spawnParticle(particleTypes, offX, offY, offZ, speedX, speedZ, 0.1D);
     }
 
     @Unique
-    public void car$particles() {
+    public void refuel$particles() {
         if (!level().isClientSide) {
             return;
         }
-        int health = (int) (car$getHealth() / car$getMaxHealth() * 100f);
+        int health = (int) (refuel$getHealth() / refuel$getMaxHealth() * 100f);
 
         if (health > 50) {
             return; // Don't render damage particles if car is above 50% health
@@ -1373,19 +1351,6 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
 
     }
 
-    @Unique
-    public float car$wheelRotation;
-
-    @Unique
-    public void car$updateWheelRotation() {
-        car$wheelRotation += car$getWheelRotationAmount();
-    }
-
-    @Override
-    public float car$getWheelRotation(float partialTicks) {
-        return car$wheelRotation + car$getWheelRotationAmount() * partialTicks;
-    }
-
     @Override
     public boolean isPushable() {
         return true;
@@ -1397,39 +1362,31 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public boolean car$isValidFuel(Fluid fluid) {
-        if (fluid == null) {
-            return false;
-        }
-        return car$getEfficiency(fluid) > 0;
+    public void refuel$initTemperature() {
+        refuel$setTemperature(refuel$getBiomeTemperatureCelsius());
     }
 
     @Unique
-    public void car$initTemperature() {
-        car$setTemperature(car$getBiomeTemperatureCelsius());
-    }
-
-    @Unique
-    public void car$updateControls(boolean forward, boolean backward, boolean left, boolean right, Player player) {
+    public void refuel$updateControls(boolean forward, boolean backward, boolean left, boolean right, Player player) {
         boolean needsUpdate = false;
 
-        if (car$isForward() != forward) {
-            car$setForward(forward);
+        if (refuel$isForward() != forward) {
+            refuel$setForward(forward);
             needsUpdate = true;
         }
 
-        if (car$isBackward() != backward) {
-            car$setBackward(backward);
+        if (refuel$isBackward() != backward) {
+            refuel$setBackward(backward);
             needsUpdate = true;
         }
 
-        if (car$isLeft() != left) {
-            car$setLeft(left);
+        if (refuel$isLeft() != left) {
+            refuel$setLeft(left);
             needsUpdate = true;
         }
 
-        if (car$isRight() != right) {
-            car$setRight(right);
+        if (refuel$isRight() != right) {
+            refuel$setRight(right);
             needsUpdate = true;
         }
         if (level().isClientSide && needsUpdate) {
@@ -1438,7 +1395,7 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public void car$centerCar() {
+    public void refuel$centerCar() {
         Direction facing = getDirection();
         switch (facing) {
             case SOUTH:
@@ -1457,167 +1414,50 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Unique
-    public void car$openCarGUI(Player player) {
-        if (level().isClientSide) {
+    public void refuel$openGUI(Player player) {
+        if (level().isClientSide)
             RefueledChannel.sendToServer(new VehicleGUI(player));
-        }
+        else if (player instanceof ServerPlayer srvrplyr)
+            NetworkHooks.openScreen(srvrplyr, this, packetBuffer -> packetBuffer.writeUUID(getUUID()));
 
-        if (!level().isClientSide && player instanceof ServerPlayer) {
-            NetworkHooks.openScreen((ServerPlayer) player, new MenuProvider() {
-                @Override
-                public Component getDisplayName() {
-                    return CarMixin.this.getDisplayName();
-                }
-
-                @Nullable
-                @Override
-                public AbstractContainerMenu createMenu(int i, Inventory playerInventory, Player playerEntity) {
-                    return new CarGUI(i, playerInventory, CarMixin.this);
-                }
-            }, packetBuffer -> packetBuffer.writeUUID(getUUID()));
-        }
     }
 
-    @Unique
-    private static float car$speedMod = (1 + SPEED);
+    @Override
+    public AbstractContainerMenu createMenu(int i, @NotNull Inventory playerInventory, @NotNull Player playerEntity) {
+        return new CarGUI(i, this, playerInventory);
+    }
 
-    /**
-     * maxSpeed{
-     * body:
-     *     bodyBigWood      = 0.85
-     *     bodyWooden       = 0.9
-     *     bodySport        = 1.2
-     *     bodySUV          = 0.8
-     *     bodyTransporter  = 0.8
-     *     ----------------------
-     *     engineV3     = 0.75
-     *     engineV6     = 0.9
-     *     engineTruck  = 0.65
-     * }
-     * engineMaxReverseSpeed{
-     *     v3       = 0.2
-     *     v6       = 0.25
-     *     truck    = 0.15
-     * }
-     * acceleration{
-     *     bodyBigWood      = 0.95
-     *     bodyWooden       = 1
-     *     bodySport        = 1
-     *     bodySUV          = 0.8
-     *     bodyTransporter  = 0.8
-     *     -----------------------
-     *     engineV3     = 0.04
-     *     engineV6     = 0.03
-     *     engineTruck  = 0.035
-     * }
-     * fuelEfficiency{
-     *     bodyBigWood      = 0.7
-     *     bodyWooden       = 0.8
-     *     bodySport        = 0.9
-     *     bodySUV          = 0.6
-     *     bodyTransporter  = 0.6
-     *     ----------------------
-     *     engineV3     = 0.5
-     *     engineV6     = 0.25
-     *     engineTruck  = 0.8
-     * fuel:
-     *     bioDiesel    = 100[%]
-     * }
-     * Modern: Big Wood body, V3 engine
-     * Classic: Wooden body, V3 engine
-     * Truck: Transporter body, Truck engine
-     * SUV: SUV body, Truck engine
-     * Sport: Sport body, V6 engine
-     * Bike: Sport body, V3 engine
-     */
     @Mixin(Car.class)
-    private abstract static class ModernMixin implements ICarInvoker {
-
+    private abstract static class ModernMixin implements IVehicleAccess {
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 20f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 5f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(0).floatValue();
         }
 
-        public float car$getMaxSpeed() {
-            // bodyMaxSpeed * engineMaxSpeed * DragN's maxSpeed
-            return 0.85f * 0.75f * car$speedMod;
-        }
-
-        public float car$getMaxReverseSpeed() {
-            // engineMaxReverseSpeed * DragN's maxSpeed
-            return 0.2f * car$speedMod;
-        }
-
-        public float car$getAcceleration() {
-            // bodyAcceleration * engineAcceleration * DragN's maxSpeed
-            return 0.04f * 0.95f * car$speedMod;
-        }
-
-        public int car$getEfficiency(@Nullable Fluid fluid) {
-            // bodyEfficiency * engineEfficiency * fuelEfficiency
-            return (int) Math.ceil(ServerConfig.modernFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-                remap = false,
-                method = "getStepHeight",
-                at = @At("RETURN"),
-                cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.modernStepHeight.get().floatValue());
+        public float refuel$getMaxHealth(){
+            return ServerConfig.vehicleHealth.get().get(0).floatValue();
         }
     }
 
     @Mixin(Classic.class)
-    private abstract static class ClassicMixin implements ICarInvoker {
+    private abstract static class ClassicMixin implements IVehicleAccess {
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 20f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 5f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(1).floatValue();
         }
 
-        public float car$getMaxSpeed() {
-            return 0.9f * 0.75f * car$speedMod;
-        }
-
-        public float car$getMaxReverseSpeed() {
-            return 0.2f * car$speedMod;
-        }
-
-        public float car$getAcceleration() {
-            return 0.04f * 1f * car$speedMod;
-        }
-
-        public int car$getEfficiency(@Nullable Fluid fluid) {
-            return (int) Math.ceil(ServerConfig.classicFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-                remap = false,
-                method = "getStepHeight",
-                at = @At("RETURN"),
-                cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.classicStepHeight.get().floatValue());
-        }
-
-        public float car$getRamDamage(){
-            return ServerConfig.classicRamDamage.get().floatValue();
-        }
-
-        public int car$getMaxFuel() {
-            return ServerConfig.classicMaxFuel.get();
+        public float refuel$getMaxHealth(){
+            return ServerConfig.vehicleHealth.get().get(1).floatValue();
         }
 
         @Override
-        public Vec3[] car$getSeatPositions() {
+        public Vec3[] refuel$getSeatPositions() {
             return new Vec3[]{
                     new Vec3(0.65 * sizeFactor, 0.1 * sizeFactor, 0.1 * sizeFactor),
                     new Vec3(-0.65 * sizeFactor, 0.1 * sizeFactor, 0.1 * sizeFactor),
@@ -1628,164 +1468,111 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
     }
 
     @Mixin(Truck.class)
-    private abstract static class TruckMixin implements ICarInvoker{
+    private abstract static class TruckMixin extends Entity implements IVehicleAccess {
+        public TruckMixin(EntityType<?> pEntityType, Level pLevel) {
+            super(pEntityType, pLevel);
+        }
+
+        @Shadow(remap = false)
+        public SimpleContainer inventory;
+
+        protected boolean canAddPassenger(@NotNull Entity pPassenger) {
+            int emptyCount = 0;
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                if (inventory.getItem(i).isEmpty()) emptyCount++;
+            }
+            emptyCount = Math.min(48, emptyCount);
+            return this.getPassengers().size() < 2 + emptyCount / 24;
+        }
+
+        @ModifyArg(
+                method = "createInventory",
+                at = @At(
+                        value = "INVOKE",
+                        target = "Lnet/minecraft/world/SimpleContainer;<init>(I)V"
+                ),
+                index = 0
+        )
+        private int refuel$increaseSize(int pSize) {
+            return 72;
+        }
+
+        @Redirect(
+                method = "interact*",
+                at = @At(
+                        value = "INVOKE",
+                        target = "Lnet/minecraftforge/network/NetworkHooks;openScreen(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/MenuProvider;)V"
+                )
+        )
+        private void refuel$redirectIntoLargerGUI(ServerPlayer player, MenuProvider containerSupplier) {
+            NetworkHooks.openScreen(player, new MenuProvider() {
+                @Override
+                public @NotNull Component getDisplayName() {
+                    return TruckMixin.this.getDisplayName();
+                }
+
+                @Override
+                public @NotNull AbstractContainerMenu createMenu(int i, @NotNull Inventory playerInventory, @NotNull Player playerEntity) {
+                    return new TruckGUI(i, TruckMixin.this, playerInventory);
+                }
+            }, packetBuffer -> packetBuffer.writeUUID(getUUID()));
+        }
+
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 25f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 5f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(2).floatValue();
         }
 
-        public float car$getMaxSpeed() {
-            return 0.8f * 0.65f * car$speedMod;
+        public float refuel$getPitch() {
+            return 1f + 0.34f * Math.abs(refuel$getSpeed()) / refuel$getMaxSpeed();
         }
 
-        public float car$getMaxReverseSpeed() {
-            return 0.15f * car$speedMod;
-        }
-
-        public float car$getAcceleration() {
-            return 0.035f * 0.8f * car$speedMod;
-        }
-
-        public int car$getEfficiency(@Nullable Fluid fluid) {
-            return (int) Math.ceil(ServerConfig.truckFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-                remap = false,
-                method = "getStepHeight",
-                at = @At("RETURN"),
-                cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.truckStepHeight.get().floatValue());
-        }
-
-        public float car$getPitch() {
-            return 1f + 0.34f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
-        }
-
-        public SoundEvent car$getEngineSound(){
+        public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.TRUCK_ENGINE.get();
         }
 
-        public float car$getRamDamage(){
-            return ServerConfig.truckRamDamage.get().floatValue();
-        }
-
-        public float car$getMaxHealth(){
-            return 125f;
-        }
-
-        public float car$getMinRotationSpeed(){
-            return ServerConfig.truckMaxRotation.get().floatValue();
-        }
-
-        public int car$getMaxFuel() {
-            return ServerConfig.truckMaxFuel.get();
+        public float refuel$getMaxHealth() {
+            return ServerConfig.vehicleHealth.get().get(2).floatValue();
         }
     }
 
     @Mixin(SUV.class)
-    private abstract static class SUVMixin implements ICarInvoker{
+    private abstract static class SUVMixin implements IVehicleAccess {
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 25f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 5f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(3).floatValue();
         }
 
-        public float car$getMaxSpeed() {
-            return 0.8f * 0.65f * car$speedMod;
+        public float refuel$getPitch() {
+            return 1f + 0.34f * Math.abs(refuel$getSpeed()) / refuel$getMaxSpeed();
         }
 
-        public float car$getMaxReverseSpeed() {
-            return 0.15f * car$speedMod;
-        }
-
-        public float car$getAcceleration() {
-            return 0.035f * 0.8f * car$speedMod;
-        }
-
-        public int car$getEfficiency(@Nullable Fluid fluid) {
-            return (int) Math.ceil(ServerConfig.suvFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-                remap = false,
-                method = "getStepHeight",
-                at = @At("RETURN"),
-                cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.suvStepHeight.get().floatValue());
-        }
-
-        public float car$getPitch() {
-            return 1f + 0.34f * Math.abs(car$getSpeed()) / car$getMaxSpeed();
-        }
-
-        public SoundEvent car$getEngineSound(){
+        public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.TRUCK_ENGINE.get();
         }
 
-        public float car$getRamDamage(){
-            return ServerConfig.suvRamDamage.get().floatValue();
-        }
-
-        public float car$getMaxHealth(){
-            return 125f;
-        }
-
-        public float car$getMinRotationSpeed(){
-            return ServerConfig.suvMaxRotation.get().floatValue();
-        }
-
-        public int car$getMaxFuel() {
-            return ServerConfig.suvMaxFuel.get();
+        public float refuel$getMaxHealth() {
+            return ServerConfig.vehicleHealth.get().get(3).floatValue();
         }
     }
 
     @Mixin(SportCar.class)
-    private abstract static class SportMixin implements ICarInvoker {
+    private abstract static class SportMixin implements IVehicleAccess {
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 20f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 4f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(4).floatValue();
         }
 
-        public float car$getMaxSpeed() {
-            return 1.2f * 0.9f * car$speedMod;
-        }
-
-        public float car$getMaxReverseSpeed() {
-            return 0.25f * car$speedMod;
-        }
-
-        public float car$getAcceleration() {
-            return 0.03f * 1f * car$speedMod;
-        }
-
-        public int car$getEfficiency(@Nullable Fluid fluid) {
-            return (int) Math.ceil(ServerConfig.sportFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-                remap = false,
-                method = "getStepHeight",
-                at = @At("RETURN"),
-                cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.sportStepHeight.get().floatValue());
-        }
-
-        public Vec3[] car$getSeatPositions() {
+        public Vec3[] refuel$getSeatPositions() {
             return new Vec3[]{
                     new Vec3(0.7 * sizeFactor, 0, 0.1 * sizeFactor),
                     new Vec3(-0.7 * sizeFactor, 0, 0.1 * sizeFactor),
@@ -1794,77 +1581,38 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             };
         }
 
-        public float car$getRamDamage(){
-            return ServerConfig.sportRamDamage.get().floatValue();
+        public float refuel$getMaxHealth() {
+            return ServerConfig.vehicleHealth.get().get(4).floatValue();
         }
 
-        public float car$getMaxHealth(){
-            return 80f;
-        }
-
-        public double[] car$getExhaust(int rand){
+        public float[] refuel$getExhaust(int rand) {
+            final var factor = sizeFactor;
             double[] modX = new double[]{1D, -1D, 1D, -1D};
-            double radius = Math.sqrt((1d + 1.8d * sizeFactor - 1D) * (1d + 1.8d * sizeFactor - 1D) + (sizeFactor - 0) * (sizeFactor - 0));                             // calculates distance from entity center to exhaust point
-            double pointDist = Math.sqrt((1d + 1.8d * sizeFactor - (1D + radius)) * (1d + 1.8d * sizeFactor - (1D + radius)) + (sizeFactor - 0) * (sizeFactor - 0));    // calculates distance from exhaust point to current entity viewing point
+            double radius = Math.sqrt(1.8 * factor * 1.8 * factor + factor * factor);                             // calculates distance from entity center to exhaust point
+            double pointDist = Math.sqrt((1 + 1.8 * factor - (1 + radius)) * (1 + 1.8 * factor - (1 + radius)) + factor * factor);    // calculates distance from exhaust point to current entity viewing point
             double angle = 2 * Math.asin(0.5 * pointDist / radius) * modX[rand];
 
-            return new double[]{radius, angle, 0.08D * sizeFactor};
+            return new float[]{(float) radius, (float) angle, 0.08f * factor.floatValue()};
         }
 
-        public float car$getMinRotationSpeed(){
-            return ServerConfig.sportMaxRotation.get().floatValue();
-        }
-
-        public SoundEvent car$getEngineSound(){
+        public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.SPORT_ENGINE.get();
-        }
-
-        public int car$getMaxFuel() {
-            return ServerConfig.sportMaxFuel.get();
         }
     }
 
     @Mixin(Motorcycle.class)
-    private abstract static class BikeMixin implements ICarInvoker{
+    private abstract static class BikeMixin implements IVehicleAccess {
         @ModifyConstant(
                 method = "defineSynchedData",
                 constant = @Constant(floatValue = 20f)
         )
-        private float car$increaseHealth(float original) {
-            return original * 3f;
+        private float refuel$increaseHealth(float original) {
+            return ServerConfig.vehicleHealth.get().get(5).floatValue();
         }
 
         @Override
-        public float car$getMaxSpeed() {
-            return 1.2f * 0.75f * car$speedMod;
-        }
-
-        @Override
-        public float car$getMaxReverseSpeed() {
-            return 0.2f * car$speedMod;
-        }
-
-        @Override
-        public float car$getAcceleration() {
-            return 0.04f * 1f * car$speedMod;
-        }
-
-        public int car$getEfficiency(Fluid fluid) {
-            return (int) Math.ceil(ServerConfig.bikeFuelEff.get().floatValue() * getFuelEfficiency(fluid));
-        }
-
-        @Inject(
-            remap = false,
-            method = "getStepHeight",
-            at = @At("RETURN"),
-            cancellable = true
-        )
-        private void car$modifyStepHeight(CallbackInfoReturnable<Float> cir){
-            cir.setReturnValue(ServerConfig.bikeStepHeight.get().floatValue());
-        }
-
-        @Override
-        public double[] car$getExhaust(int rand){
+        public float[] refuel$getExhaust(int rand) {
+            // todo sizeFactor
             double[] modX = new double[]{1d, -1d, 1d, -1d};
             double[] randomOffY = new double[]{0.5d, 0.5d, 0.525D - 0.2D, 0.525D - 0.2D};
             double[] modY = new double[]{1.125d, 1.125d, 1.125D - 0.15D, 1.125D - 0.15D};
@@ -1873,37 +1621,32 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             double pointDist = Math.sqrt((modY[rand] - (1D + radius)) * (modY[rand] - (1D + radius)) + (0.2D - 0) * (0.2D - 0));
             double angle = (2 * Math.asin(0.5 * pointDist / radius)) * modX[rand];
 
-            return new double[]{radius, angle, randomOffY[rand]};
+            return new float[]{(float) radius, (float) angle, (float) randomOffY[rand]};
         }
 
-        public Vec3[] car$getSeatPositions(){
+        public Vec3[] refuel$getSeatPositions() {
             return new Vec3[]{
-                    new Vec3(0, 0.8 * 0.7 * sizeFactor, -0.5 * sizeFactor)
+                    new Vec3(0, 0.56 * sizeFactor, -0.5 * sizeFactor)
             };
         }
 
-        public float car$getRamDamage(){
-            return ServerConfig.bikeRamDamage.get().floatValue();
+        public float refuel$getMaxHealth() {
+            return ServerConfig.vehicleHealth.get().get(5).floatValue();
         }
 
-        public float car$getMaxRotationSpeed(){
-            return 5f;
-        }
-
-        public float car$getMinRotationSpeed(){
-            return ServerConfig.bikeMaxRotation.get().floatValue();
-        }
-
-        public float car$getMaxHealth(){
-            return 60f;
-        }
-
-        public SoundEvent car$getEngineSound(){
+        public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.SPORT_ENGINE.get();
         }
 
-        public int car$getMaxFuel() {
-            return ServerConfig.bikeMaxFuel.get();
+        @Redirect(
+                method = "interact",
+                at = @At(
+                        value = "INVOKE",
+                        target = "Lnet/minecraftforge/network/NetworkHooks;openScreen(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/MenuProvider;)V"
+                )
+        )
+        private void refuel$mergeInventories(ServerPlayer player, MenuProvider containerSupplier) {
+            refuel$openGUI(player);
         }
     }
 
@@ -1915,12 +1658,129 @@ public abstract class CarMixin extends Entity implements ICarInvoker, Container,
             if (((IEntityAccess) this).getPassengers().size() == 1 && ((IEntityAccess) this).getPassengers().get(0) == pPassenger) {
                 ((IEntityAccess) this).setPassengers(ImmutableList.of());
             } else {
-                ((IEntityAccess) this).setPassengers(((IEntityAccess) this).getPassengers().stream().filter((p_185980_) -> p_185980_ != pPassenger).collect(ImmutableList.toImmutableList()));
+                ((IEntityAccess) this).setPassengers(((IEntityAccess) this).getPassengers().stream().filter(pPassenger::equals).collect(ImmutableList.toImmutableList()));
             }
 
             ((IEntityAccess) pPassenger).setBoardingCooldown(60);
             pPassenger.refreshDimensions();
             this.gameEvent(GameEvent.ENTITY_DISMOUNT, pPassenger);
+        }
+    }
+
+    @Override
+    public void onAddedToWorld() {
+        super.onAddedToWorld();
+        if (ServerConfig.vehiclePersist.get()) {
+            if (getPersistentData().contains(REFUELED_KEY)) {
+                CompoundTag tag = getPersistentData().getCompound(REFUELED_KEY);
+                for (var key : tag.getAllKeys()) {
+                    ServerPlayer player = (ServerPlayer) level().getPlayerByUUID(tag.getUUID(key));
+                    if (player != null)
+                        player.startRiding(this);
+                }
+
+                getPersistentData().remove(REFUELED_KEY);
+            }
+        }
+    }
+
+    public int refuel$getMaxBattery(){
+        return Mth.floor(refuel$configData.get("battery"));
+    }
+
+    public float refuel$getMaxSpeed() {
+        return refuel$configData.get("maxSpeed").floatValue();
+    }
+
+    public float refuel$getMaxReverseSpeed() {
+        return refuel$configData.get("maxReverseSpeed").floatValue();
+    }
+
+    public float refuel$getAcceleration() {
+        return refuel$configData.get("acceleration").floatValue();
+    }
+
+    @Unique
+    public float refuel$getRamDamage() {
+        return refuel$configData.get("ramDamage").floatValue();
+    }
+
+    @Unique
+    public float refuel$getEfficiency(Fluid fluid){
+        return refuel$configData.get("fuelEfficiency").floatValue() * getFuelEfficiency(fluid);
+    }
+
+    @Unique
+    public float refuel$getHighSpeedSteering(){
+        return refuel$configData.get("minSteer").floatValue();
+    }
+
+    @Unique
+    public float refuel$getLowSpeedSteering(){
+        return refuel$configData.get("maxSteer").floatValue();
+    }
+
+    public int refuel$getMaxFuel(){
+        return Mth.floor(refuel$configData.get("maxFuel"));
+    }
+
+    public float getStepHeight(){
+        return refuel$configData.get("stepHeight").floatValue();
+    }
+
+    @Unique
+    private void refuel$checkSlots(){
+        if (!refuel$internalInventory.getItem(0).isEmpty()) {
+            ItemStack stack = refuel$internalInventory.getItem(0);
+            IFluidHandler handler = getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
+            LazyOptional<IFluidHandlerItem> lazyOtherHandler = FluidUtil.getFluidHandler(stack);
+
+            lazyOtherHandler.ifPresent(otherHandler -> {
+                if (!otherHandler.drain(handler.fill(otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.SIMULATE).isEmpty()) {
+                    otherHandler.drain(handler.fill(otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
+
+                    if (!level().isClientSide) {
+                        level().playSound(null, getX() + 0.5D, getY() + 0.5D, getZ() + 0.5D, SoundEvents.BREWING_STAND_BREW, SoundSource.MASTER, 0.15f, 1f);
+                    }
+                }
+            });
+        }
+
+        if(!refuel$internalInventory.getItem(1).isEmpty()){
+            ItemStack stack = refuel$internalInventory.getItem(1);
+
+            IEnergyStorage energy = getCapability(ForgeCapabilities.ENERGY).resolve().get();
+            LazyOptional<IEnergyStorage> lazyOtherEnergy = stack.getCapability(ForgeCapabilities.ENERGY);
+            lazyOtherEnergy.ifPresent(otherEnergy -> {
+                if (energy.receiveEnergy(otherEnergy.getEnergyStored(), true) > 0) {
+                    otherEnergy.extractEnergy(energy.receiveEnergy(otherEnergy.getEnergyStored(), false), false);
+                }
+            });
+
+            if(stack.getItem().equals(Items.REDSTONE) && energy.receiveEnergy(360, true) > 0) {
+                if(energy.receiveEnergy(360, true) > 0){
+                    stack.shrink(1);
+                    refuel$internalInventory.setChanged();
+                    energy.receiveEnergy(360, false);
+                }
+            }
+        }
+
+        if(!refuel$internalInventory.getItem(2).isEmpty()){
+            ItemStack stack = refuel$internalInventory.getItem(2);
+            var data = getRepairItemData(stack);
+
+            //noinspection DataFlowIssue
+            if (getHP(this) <= 25 && stack.getCount() > Integer.parseInt(data.get(0))) {
+                float health = refuel$getHealth() + Float.parseFloat(data.get(1));
+                stack.shrink(Integer.parseInt(data.get(0)));
+                refuel$internalInventory.setChanged();
+                refuel$setHealth(health);
+                if(!level().isClientSide) {
+                    level().playSound(null, blockPosition(), SoundEvents.SPYGLASS_USE, SoundSource.BLOCKS, 1f, 0.75f);
+                }
+            }
+
         }
     }
 }
