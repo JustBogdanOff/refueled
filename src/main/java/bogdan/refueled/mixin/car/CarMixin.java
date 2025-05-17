@@ -83,6 +83,25 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         super(pEntityType, pLevel);
     }
 
+    /*
+     * Any references to this abstract CarMixin class gets replaced with a class reference to the currently mix-ined class
+     * i.e: Current mixined class is 'Truck.class'
+     * then CarMixin.this, CarMixin.class -> Truck.this, Truck.class
+     */
+
+    /**
+     * todo:
+     *     - Implement a way to keep the vehicles locked
+     *     - model custom slot and 2 states, one with key and other without
+     *     - render the cars glovebox locked (disabled slots)
+     *     - Add a gas station block and tile entity
+     *     - add a way to pickup the vehicles
+     *     - Add 2 collision PartEntity hitboxes to front and back of the vehicles
+     *     - update the sloping system block collection
+     *     - make the recipes conditional
+     **/
+
+
     @Unique
     private final static HashMap<String, Double> refuel$configData = new HashMap<>();
 
@@ -100,8 +119,8 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         refuel$configData.put("fuelEfficiency", ServerConfig.vehicleFuelEff.get().get(type));
         refuel$configData.put("minSteer", ServerConfig.vehicleSteering.get().get(type).get(0));
         refuel$configData.put("maxSteer", ServerConfig.vehicleSteering.get().get(type).get(1));
-        refuel$configData.put("maxFuel", ServerConfig.vehicleFuel.get().get(type).doubleValue());
-        refuel$configData.put("battery", ServerConfig.vehicleBattery.get().get(type).doubleValue());
+        refuel$configData.put("maxFuel", Double.valueOf(ServerConfig.vehicleFuel.get().get(type)));
+        refuel$configData.put("battery", Double.valueOf(ServerConfig.vehicleBattery.get().get(type)));
 
         refuel$internalInventory = new SimpleContainer(27);
         refuel$lazyFluid = LazyOptional.of(() -> new IFluidHandler() {
@@ -123,13 +142,13 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
             @Override
             public boolean isFluidValid(int tank, @Nonnull FluidStack stack) {
-                return getFuelEfficiency(stack.getFluid()) > 0;
+                return ServerConfig.getFuelEfficiency(stack.getFluid()) > 0;
             }
 
             @Override
             public int fill(FluidStack resource, FluidAction action) {
                 Fluid fluid = refuel$getFluid();
-                if (resource == null || (fluid != Fluids.EMPTY && !resource.getFluid().equals(refuel$getFluid())) || getFuelEfficiency(resource.getFluid()) < 0) {
+                if (resource == null || (fluid != Fluids.EMPTY && !resource.getFluid().equals(refuel$getFluid())) || ServerConfig.getFuelEfficiency(resource.getFluid()) < 0) {
                     return 0;
                 }
                 var fluidKey = ForgeRegistries.FLUIDS.getKey(resource.getFluid());
@@ -219,23 +238,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             }
         });
     }
-
-    /*
-     * Any references to this abstract CarMixin class gets replaced with a class reference to the currently mix-ined class
-     * i.e: Current mixined class is 'Truck.class'
-     * then CarMixin.this, CarMixin.class -> Truck.this, Truck.class
-     */
-
-    /**
-     * todo:
-     *     - Implement a way to keep the vehicles locked
-     *     - model custom slot and 2 states, one with key and other without
-     *     - render the cars glovebox locked (disabled slots)
-     *     - Add a gas station block and tile entity
-     *     - add a way to pickup the vehicles
-     *     - Add 2 collision PartEntity hitboxes to front and back of the vehicles
-     *     - update the sloping system block collection
-     **/
 
     @Inject(
             method = "interact*",
@@ -649,7 +651,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public float refuel$getModifier() {
-        var multiplier = getRoadBlockMultiplier(getBlockStateOn());
+        var multiplier = ServerConfig.getRoadBlockMultiplier(getBlockStateOn());
         if (multiplier > 0) return multiplier;
 
         return ServerConfig.offroadSpeed.get().floatValue();
@@ -1707,7 +1709,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public float refuel$getEfficiency(Fluid fluid){
-        return refuel$configData.get("fuelEfficiency").floatValue() * getFuelEfficiency(fluid);
+        return refuel$configData.get("fuelEfficiency").floatValue() * ServerConfig.getFuelEfficiency(fluid);
     }
 
     @Unique
@@ -1768,7 +1770,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         if(!refuel$internalInventory.getItem(2).isEmpty()){
             ItemStack stack = refuel$internalInventory.getItem(2);
-            var data = getRepairItemData(stack);
+            var data = ServerConfig.getRepairItemData(stack);
 
             //noinspection DataFlowIssue
             if (getHP(this) <= 25 && stack.getCount() > Integer.parseInt(data.get(0))) {

@@ -2,6 +2,7 @@ package bogdan.refueled.common.gui;
 
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.accessors.IVehicleAccess;
+import bogdan.refueled.config.ServerConfig;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
@@ -13,8 +14,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import org.jetbrains.annotations.NotNull;
-
-import static bogdan.refueled.Utils.getRepairItemData;
 
 public class CarGUI extends AbstractContainerMenu {
 
@@ -50,7 +49,7 @@ public class CarGUI extends AbstractContainerMenu {
         addSlot(new Slot(inventory, 2, 8, 102){
             @Override
             public boolean mayPlace(@NotNull ItemStack stack) {
-                return getRepairItemData(stack) != null;
+                return ServerConfig.getRepairItemData(stack) != null;
             }
         });
 
