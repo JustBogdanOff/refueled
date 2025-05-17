@@ -2,6 +2,9 @@ package bogdan.refueled.config;
 
 import bogdan.refueled.RefueledMain;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -42,6 +45,7 @@ public class ServerConfig {
             builder.push("vehicles").comment("Each of these configs are represented using an array that affect in order respectively", "Modern cars, Classic cars, Trucks, SUVs, Sport cars, Motorcycles");
                 vehicleSpeed = builder
                         .comment("Maximal speeds the vehicles can reach in blocks per tick")
+                        .translation("itemGroup.refueled")
                         .define("speed", List.of(
                                 // body * engine * dragn007
                                 0.85 * 0.75 * 1.2,
@@ -190,20 +194,17 @@ public class ServerConfig {
     private static boolean validateSteering(final Object unsureList){
         if(unsureList instanceof List<?> list){
             if(list.size() != 6){
-                if(list.size() < 6){
-                    RefueledMain.LOGGER.warn("Steering server config list {} below expected size, defaulting.", 6 - list.size());
-                    return false;
-                }
+                if(list.size() < 6)
+                    return warn("Steering server config list {} below expected size, defaulting.", 6 - list.size());
                 else RefueledMain.LOGGER.warn("Steering server config list {} above expected size", list.size() - 6);
             }
 
             for(var unsureValues : list){
                 if(unsureValues instanceof List<?> values){
                     if(values.size() != 2){
-                        if(values.size() < 2){
-                            RefueledMain.LOGGER.warn("An array in the server config list is {} below expected size, defaulting.", 6 - list.size());
-                            return false;
-                        }
+                        if(values.size() < 2)
+                            return warn("An array in the steering config list is {} below expected size, defaulting.", 6 - list.size());
+                        else RefueledMain.LOGGER.warn("An array in the steering config list is {} above expected size.", 6 - list.size());
                     }
 
                     if(values.get(0) instanceof String minValue && values.get(1) instanceof String maxValue){
@@ -213,8 +214,7 @@ public class ServerConfig {
                                 return false;
                             }
                         } catch (NumberFormatException exception){
-                            RefueledMain.LOGGER.warn("Invalid number in one of the arrays of the steering server config list, defaulting.");
-                            return false;
+                            return warn("Unparsable number in one of the arrays of the steering server config list, defaulting.");
                         }
                     }
                 }
@@ -230,8 +230,7 @@ public class ServerConfig {
         if(unsureList instanceof List<?> list){
             if(list.size() != 6){
                 if(list.size() < 6){
-                    RefueledMain.LOGGER.warn("Server config list {} below expected size, defaulting.", 6 - list.size());
-                    return false;
+                    return warn("Server config list {} below expected size, defaulting.", 6 - list.size());
                 }
                 else RefueledMain.LOGGER.warn("Server config list {} above expected size.", list.size() - 6);
             }
@@ -244,8 +243,7 @@ public class ServerConfig {
                             return false;
                         }
                     } catch (NumberFormatException exception){
-                        RefueledMain.LOGGER.warn("Invalid number in one of the server config lists, defaulting.");
-                        return false;
+                        return warn("Unparsable number in one of the server config lists, defaulting.");
                     }
                 }
             }
@@ -258,30 +256,23 @@ public class ServerConfig {
 
     private static boolean validateBlock(final Object element) {
         if(element instanceof List<?> list) {
-            if(list.size() < 2){
-                RefueledMain.LOGGER.warn("Incomplete server config list value @ road_blocks, discarding.");
-                return false;
-            }
+            if(list.size() < 2)
+                return warn("Incomplete server config list value @ road_blocks, discarding.");
 
             if(list.get(0) instanceof String block && list.get(1) instanceof String multiplier){
                 try{
                     if(Float.parseFloat(multiplier) <= 0)
                         return false;
                 } catch (NumberFormatException exception){
-                    RefueledMain.LOGGER.warn("Invalid server config value @ road_blocks/{}, discarding.", block);
-                    return false;
+                    return warn("Invalid server config value @ road_blocks/{}, discarding.", block);
                 }
 
-                if (block.startsWith("#")) {
-                    var blockTags = ForgeRegistries.BLOCKS.tags();
-                    if (!ResourceLocation.isValidResourceLocation(block.substring(1)) || blockTags == null)
-                        return false;
+                if (block.startsWith("#"))
+                    block = block.substring(1);
+                return ResourceLocation.isValidResourceLocation(block);
 
-                    return blockTags.getTagNames().anyMatch(blockTag -> blockTag.location().toString().equals(block.substring(1)));
-                }
-
-                if (!ResourceLocation.isValidResourceLocation(block)) return false;
-                return ForgeRegistries.BLOCKS.containsKey(new ResourceLocation(block));
+                //return blockTags.getTagNames().anyMatch(blockTag -> blockTag.location().toString().equals(block.substring(1)));
+                //return ForgeRegistries.BLOCKS.containsKey(new ResourceLocation(block));
             }
         }
 
@@ -290,24 +281,20 @@ public class ServerConfig {
 
     private static boolean validateFuel(final Object element) {
         if(element instanceof List<?> list) {
-            if(list.size() < 2){
-                RefueledMain.LOGGER.warn("Incomplete server config list value @ fuels, discarding.");
-                return false;
-            }
+            if(list.size() < 2)
+                return warn("Incomplete server config list value @ fuels, discarding.");
 
             if(list.get(0) instanceof String fluid && list.get(1) instanceof String efficiency) {
                 try{
                     if(Float.parseFloat(efficiency) <= 0)
                         return false;
                 } catch(NumberFormatException exception){
-                    RefueledMain.LOGGER.warn("Invalid server config value @ fuels/{}, discarding.", fluid);
-                    return false;
+                    return warn("Invalid server config value @ fuels/{}, discarding.", fluid);
                 }
 
-                if(!ResourceLocation.isValidResourceLocation(fluid))
-                    return false;
+                return ResourceLocation.isValidResourceLocation(fluid);
 
-                return ForgeRegistries.FLUIDS.getKeys().contains(new ResourceLocation(fluid));
+                //return ForgeRegistries.FLUIDS.getKeys().contains(new ResourceLocation(fluid));
             }
         }
 
@@ -316,35 +303,82 @@ public class ServerConfig {
 
     private static boolean validateRepairItem(final Object element){
         if(element instanceof List<?> list){
-            if(list.size() < 3){
-                RefueledMain.LOGGER.warn("Incomplete server config list value in repair_items, discarding.");
-                return false;
-            }
+            if(list.size() < 3)
+                return warn("Incomplete server config list value in repair_items, discarding.");
 
             if(list.get(0) instanceof String itemOrTag && list.get(1) instanceof String count && list.get(2) instanceof String repairValue){
                 try{
                     if(Integer.parseInt(count) < 0 || Float.parseFloat(repairValue) <= 0)
                         return false;
                 } catch(NumberFormatException exception){
-                    RefueledMain.LOGGER.warn("Invalid server config value @ repair_items/{}, discarding.", itemOrTag);
-                    return false;
+                    return warn("Invalid server config value @ repair_items/{}, discarding.", itemOrTag);
                 }
 
-                if (itemOrTag.startsWith("#")) {
-                    var itemTags = ForgeRegistries.ITEMS.tags();
-                    if (!ResourceLocation.isValidResourceLocation(itemOrTag.substring(1)) || itemTags == null)
-                        return false;
-
-                    return itemTags.getTagNames().anyMatch(tagKey -> tagKey.location().toString().equals(itemOrTag.substring(1)));
-                }
-
-                if (!ResourceLocation.isValidResourceLocation(itemOrTag))
-                    return false;
-
-                return ForgeRegistries.ITEMS.containsKey(new ResourceLocation(itemOrTag));
+                if (itemOrTag.startsWith("#"))
+                    itemOrTag = itemOrTag.substring(1);
+                return ResourceLocation.isValidResourceLocation(itemOrTag);
+                //return itemTags.getTagNames().anyMatch(tagKey -> tagKey.location().toString().equals(itemOrTag.substring(1)));
+                //return ForgeRegistries.ITEMS.containsKey(new ResourceLocation(itemOrTag));
             }
         }
 
         return false;
+    }
+
+    private static boolean warn(String warning, Object... var){
+        RefueledMain.LOGGER.warn(warning, var);
+        return false;
+    }
+
+    public static float getRoadBlockMultiplier(BlockState state){
+        for(var list : ServerConfig.roadBlocks.get()){
+            var block = list.get(0);
+
+            if(block.startsWith("#")){
+                if(state.getTags().anyMatch(blockTag -> blockTag.location().toString().equals(block.substring(1)))){
+                    return Float.parseFloat(list.get(1));
+                }
+            }
+            else{
+                var blockKey = ForgeRegistries.BLOCKS.getKey(state.getBlock());
+                if(blockKey != null && blockKey.toString().equals(block)){
+                    return Float.parseFloat(list.get(1));
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    public static float getFuelEfficiency(Fluid fluid){
+        if (fluid != null) {
+            for(List<String> fuelValue : ServerConfig.fuelEff.get()){
+                if (fluid == ForgeRegistries.FLUIDS.getValue(new ResourceLocation(fuelValue.get(0)))) {
+                    return Float.parseFloat(fuelValue.get(1));
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    public static List<String> getRepairItemData(ItemStack item){
+        for(List<String> list : ServerConfig.repairItems.get()){
+            var repairItem = list.get(0);
+
+            if(repairItem.startsWith("#")){
+                if(item.getTags().anyMatch(repairTag -> repairTag.location().toString().equals(repairItem.substring(1)))) {
+                    return List.of(list.get(1), list.get(2));
+                }
+            }
+            else {
+                var itemKey = ForgeRegistries.ITEMS.getKey(item.getItem());
+                if(itemKey != null && itemKey.toString().equals(repairItem)){
+                    return List.of(list.get(1), list.get(2));
+                }
+            }
+        }
+
+        return null;
     }
 }
