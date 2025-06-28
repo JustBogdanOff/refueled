@@ -3,6 +3,7 @@ package bogdan.refueled;
 import bogdan.refueled.client.gui.CarGUIScreen;
 import bogdan.refueled.client.events.KeyEvent;
 import bogdan.refueled.client.events.RenderEvent;
+import bogdan.refueled.client.gui.ConfigScreen;
 import bogdan.refueled.client.gui.TruckGUIScreen;
 import bogdan.refueled.server.PlayerLevelEvent;
 import bogdan.refueled.common.network.RefueledChannel;
@@ -13,6 +14,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -32,7 +34,7 @@ public class RefueledMain {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public RefueledMain() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
+        ServerConfig.register(ModLoadingContext.get());
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
@@ -40,6 +42,7 @@ public class RefueledMain {
         modEventBus.addListener(this::commonSetup);
 
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+            // ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class, () -> new ConfigScreenHandler.ConfigScreenFactory((mc, prevScreen) -> new ConfigScreen()));
             modEventBus.addListener(this::onRegisterKeybinds);
             modEventBus.addListener(this::clientSetup);
         });

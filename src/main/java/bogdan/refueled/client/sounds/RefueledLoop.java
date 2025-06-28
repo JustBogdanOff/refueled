@@ -1,4 +1,4 @@
-package bogdan.refueled.common.sounds;
+package bogdan.refueled.client.sounds;
 
 import bogdan.refueled.config.ClientConfig;
 import net.minecraft.client.Minecraft;

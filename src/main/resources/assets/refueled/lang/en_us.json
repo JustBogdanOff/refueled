@@ -1,5 +1,5 @@
 {
-  "itemGroup.refueled": "DragN's VV: Refueled",
+  "itemGroup.refueled.base": "DragN's VV: Refueled",
   "category.refueled": "Refueled Vehicles",
 
   "key.refueled_car_gui": "Open Vehicle GUI",

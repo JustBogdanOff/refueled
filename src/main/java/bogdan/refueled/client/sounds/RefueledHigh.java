@@ -1,4 +1,4 @@
-package bogdan.refueled.common.sounds;
+package bogdan.refueled.client.sounds;
 
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.sounds.SoundEvent;

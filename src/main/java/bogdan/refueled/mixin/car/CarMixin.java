@@ -1,5 +1,6 @@
 package bogdan.refueled.mixin.car;
 
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.gui.TruckGUI;
 import bogdan.refueled.common.network.*;
@@ -76,7 +77,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static bogdan.refueled.Utils.*;
 import static bogdan.refueled.server.PlayerLevelEvent.REFUELED_KEY;
 
-@Debug(export = true)
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
 public abstract class CarMixin extends Entity implements IVehicleAccess, MenuProvider {
     public CarMixin(EntityType<?> pEntityType, Level pLevel) {
@@ -119,8 +119,8 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         refuel$configData.put("fuelEfficiency", ServerConfig.vehicleFuelEff.get().get(type));
         refuel$configData.put("minSteer", ServerConfig.vehicleSteering.get().get(type).get(0));
         refuel$configData.put("maxSteer", ServerConfig.vehicleSteering.get().get(type).get(1));
-        refuel$configData.put("maxFuel", Double.valueOf(ServerConfig.vehicleFuel.get().get(type)));
-        refuel$configData.put("battery", Double.valueOf(ServerConfig.vehicleBattery.get().get(type)));
+        refuel$configData.put("maxFuel", ServerConfig.vehicleFuel.get().get(type).doubleValue());
+        refuel$configData.put("battery", ServerConfig.vehicleBattery.get().get(type).doubleValue());
 
         refuel$internalInventory = new SimpleContainer(27);
         refuel$lazyFluid = LazyOptional.of(() -> new IFluidHandler() {
@@ -1687,7 +1687,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     }
 
     public int refuel$getMaxBattery(){
-        return Mth.floor(refuel$configData.get("battery"));
+        return refuel$configData.get("battery").intValue();
     }
 
     public float refuel$getMaxSpeed() {
@@ -1723,7 +1723,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     }
 
     public int refuel$getMaxFuel(){
-        return Mth.floor(refuel$configData.get("maxFuel"));
+        return refuel$configData.get("maxFuel").intValue();
     }
 
     public float getStepHeight(){
