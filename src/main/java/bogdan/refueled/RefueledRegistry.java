@@ -77,7 +77,7 @@ public class RefueledRegistry {
 
     public static final RegistryObject<CreativeModeTab> REFUELED_TAB = CREATIVE_MODE_TABS.register("refueled_tab", () -> CreativeModeTab.builder()
             .withTabsBefore(CreativeModeTabs.COMBAT)
-            .title(Component.translatable("itemGroup.refueled"))
+            .title(Component.translatable("itemGroup.refueled.base"))
             .icon(() -> CANISTER.get().getDefaultInstance())
             .displayItems((parameters, output) -> {
                 output.accept(CANISTER.get());

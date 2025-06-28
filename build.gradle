@@ -83,8 +83,16 @@ dependencies {
 
     implementation fg.deobf("curse.maven:dragns-valiant-vehicles-1038652:5778739") // 1.3
 
+    // jei
     runtimeOnly fg.deobf("curse.maven:jei-238222:5793246")
+    // the one probe
     runtimeOnly fg.deobf("curse.maven:the-one-probe-245211:5159287")
+    // create
+    implementation fg.deobf("curse.maven:create-328085:6323270")
+    // mekanism
+    implementation fg.deobf("curse.maven:mekanism-268560:6258796")
+    implementation fg.deobf("curse.maven:mekanism-generators-268566:6258799")
+    implementation fg.deobf("curse.maven:mekanism-tools-268567:6258800")
 }
 
 tasks.named('processResources', ProcessResources).configure {

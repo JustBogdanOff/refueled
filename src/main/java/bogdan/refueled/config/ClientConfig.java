@@ -1,5 +1,6 @@
 package bogdan.refueled.config;
 
+import bogdan.refueled.client.gui.CarGUIScreen;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 public class ClientConfig {
@@ -13,7 +14,7 @@ public class ClientConfig {
     public static final ForgeConfigSpec.BooleanValue speedImperial;
     public static final ForgeConfigSpec.BooleanValue speedDisplay;
     public static final ForgeConfigSpec.BooleanValue displayInUnits;
-    public static final ForgeConfigSpec.IntValue pinnedType;
+    public static final ForgeConfigSpec.EnumValue<CarGUIScreen.LabelType> pinnedType;
     public static final ForgeConfigSpec.BooleanValue reminderMessage;
 
     static {
@@ -45,7 +46,7 @@ public class ClientConfig {
         pinnedType = builder
                 .comment("Which stat's level should be shown as default in the meter bar of the vehicles' GUI")
                 .comment("0 - None, 1 - Fuel, 2 - Health, 3 - Battery, 4 - Temperature")
-                .defineInRange("pinned_type", 0, 0, 4);
+                .defineEnum("pinned_type", CarGUIScreen.LabelType.NONE);
 
         reminderMessage = builder
                 .comment("Whether the player should be reminded how to start or open the vehicle's GUI")

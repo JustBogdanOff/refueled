@@ -1,10 +1,10 @@
 package bogdan.refueled.mixin.car.client;
 
 import bogdan.refueled.common.accessors.IVehicleAccess;
-import bogdan.refueled.common.sounds.RefueledHigh;
-import bogdan.refueled.common.sounds.RefueledIdle;
-import bogdan.refueled.common.sounds.RefueledStart;
-import bogdan.refueled.common.sounds.RefueledStarting;
+import bogdan.refueled.client.sounds.RefueledHigh;
+import bogdan.refueled.client.sounds.RefueledIdle;
+import bogdan.refueled.client.sounds.RefueledStart;
+import bogdan.refueled.client.sounds.RefueledStarting;
 import bogdan.refueled.config.ClientConfig;
 import bogdan.refueled.mixin.accessor.IBlockBehaviourAccess;
 import bogdan.refueled.mixin.accessor.ICameraInvoke;

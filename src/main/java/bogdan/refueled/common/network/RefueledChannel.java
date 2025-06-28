@@ -61,6 +61,18 @@ public class RefueledChannel {
                 .encoder(CenterVehicleClient::toBytes)
                 .consumerMainThread(CenterVehicleClient::handle)
                 .add();
+
+        net.messageBuilder(ConfigRequest.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(ConfigRequest::new)
+                .encoder(ConfigRequest::toBytes)
+                .consumerMainThread(ConfigRequest::handle)
+                .add();
+
+        net.messageBuilder(ConfigAccept.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(ConfigAccept::new)
+                .encoder(ConfigAccept::toBytes)
+                .consumerMainThread(ConfigAccept::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {

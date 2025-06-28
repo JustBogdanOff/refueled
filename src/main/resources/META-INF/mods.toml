@@ -3,12 +3,14 @@ loaderVersion="[47,)"
 license="All Rights Reserved"
 
 [[mods]]
-modId="refueled"
-version="1.20.1-2.0.1"
-displayName="DragN's VV: Refueled"
-authors="Bogdan_Off"
+    modId="refueled"
+    version="1.20.1-2.1.0"
+    displayName="DragN's VV: Refueled"
+    authors="Bogdan_Off"
+    displayTest="MATCH_VERSION"
+    displayURL = "https://www.curseforge.com/minecraft/mc-mods/dragns-vv-refueled"
+    description='''A mod adding a way to fuel DragN's Valiant Vehicles'''
 
-description='''A mod adding a way to fuel DragN's Valiant Vehicles'''
 [[dependencies.refueled]]
     modId="forge"
     mandatory=true

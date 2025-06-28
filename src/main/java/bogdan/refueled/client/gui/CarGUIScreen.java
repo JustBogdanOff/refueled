@@ -22,6 +22,7 @@ import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.util.List;
 
 import static bogdan.refueled.Utils.round;
 
@@ -61,10 +62,10 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
     protected void init(){
         super.init();
 
-        fuelLabel = addRenderableWidget(new Label(Label.FUEL, font, leftPos, topPos, fontColor));
-        healthLabel = addRenderableWidget(new Label(Label.HEALTH, font, leftPos, topPos, fontColor));
-        batteryLabel = addRenderableWidget(new Label(Label.BATTERY, font, leftPos, topPos, fontColor));
-        tempLabel = addRenderableWidget(new Label(Label.TEMPERATURE, font, leftPos, topPos, fontColor));
+        fuelLabel = addRenderableWidget(new Label(LabelType.FUEL, font, leftPos, topPos, fontColor));
+        healthLabel = addRenderableWidget(new Label(LabelType.HEALTH, font, leftPos, topPos, fontColor));
+        batteryLabel = addRenderableWidget(new Label(LabelType.BATTERY, font, leftPos, topPos, fontColor));
+        tempLabel = addRenderableWidget(new Label(LabelType.TEMPERATURE, font, leftPos, topPos, fontColor));
 
         addRenderableWidget(new Button(leftPos + 127, topPos + 7, 19, 19, false));
         addRenderableWidget(new Button(leftPos + 150, topPos + 7, 19, 19, true));
@@ -72,7 +73,7 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
 
     @Override
     protected void containerTick() {
-        if(ClientConfig.pinnedType.get() != 0 && (!fuelLabel.isHovered() && !healthLabel.isHovered() && !batteryLabel.isHovered() && !tempLabel.isHovered())){
+        if(ClientConfig.pinnedType.get() != LabelType.NONE && (!fuelLabel.isHovered() && !healthLabel.isHovered() && !batteryLabel.isHovered() && !tempLabel.isHovered())){
             ticksSinceAnyHover = Math.min(3, ticksSinceAnyHover + 1);
         }
         else ticksSinceAnyHover = 0;
@@ -85,11 +86,11 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-        if(ClientConfig.pinnedType.get() != 0 && !(fuelLabel.isHovered() || healthLabel.isHovered() || batteryLabel.isHovered() || tempLabel.isHovered())){
-            var type = ClientConfig.pinnedType.get() - 1;
+        if(ClientConfig.pinnedType.get() != LabelType.NONE && !(fuelLabel.isHovered() || healthLabel.isHovered() || batteryLabel.isHovered() || tempLabel.isHovered())){
+            var type = ClientConfig.pinnedType.get();
             var texOffset = Mth.floor((40d * fuelLabel.getPercent(type) * 0.01 * ticksSinceAnyHover) / 3);
 
-            guiGraphics.blit(CAR_GUI_TEXTURE, leftPos + 8, topPos + 48 - texOffset, 176 + 11 * type, 40 - texOffset, 11, texOffset);
+            guiGraphics.blit(CAR_GUI_TEXTURE, leftPos + 8, topPos + 48 - texOffset, 176 + 11 * type.getInt(), 40 - texOffset, 11, texOffset);
         }
     }
 
@@ -140,42 +141,48 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
         }
     }
 
+    public enum LabelType{
+        NONE, FUEL, HEALTH, BATTERY, TEMPERATURE;
+
+        public int getInt(){
+            return List.of(NONE, FUEL, HEALTH, BATTERY, TEMPERATURE).indexOf(this);
+        }
+    }
+
     private class Label extends AbstractWidget{
-        public Label(int type, Font font, int pX, int pY, int fontColor) {
-            super(pX + 25, pY + 8 + 11 * type, font.width(new Component[][]{getFuelString(), getHealthString(), getBatteryString(), getTemperatureString()}[type][isOtherwise(type)]), font.lineHeight, Component.empty());
+        public Label(LabelType type, Font font, int pX, int pY, int fontColor) {
+            super(pX + 25, pY + 8 + 11 * type.getInt(), font.width(new Component[][]{getFuelString(), getHealthString(), getBatteryString(), getTemperatureString()}[type.getInt()][isOtherwise(type)]), font.lineHeight, Component.empty());
             this.type = type;
             this.font = font;
             this.fontColor = fontColor;
             this.oX = pX;
             this.oY = pY;
-            this.string = new Component[][]{getFuelString(), getHealthString(), getBatteryString(), getTemperatureString()}[type];
+            this.string = new Component[][]{getFuelString(), getHealthString(), getBatteryString(), getTemperatureString()}[type.getInt()];
         }
 
-        public static final int FUEL = 0, HEALTH = 1, BATTERY = 2, TEMPERATURE = 3;
-
-        private static int isOtherwise(int type){
-            return (type == TEMPERATURE && ClientConfig.temperatureFahrenheit.get()) || (type != TEMPERATURE && ClientConfig.displayInUnits.get()) ? 0 : 1;
+        private static int isOtherwise(LabelType type){
+            return (type == LabelType.TEMPERATURE && ClientConfig.temperatureFahrenheit.get()) || (type != LabelType.TEMPERATURE && ClientConfig.displayInUnits.get()) ? 0 : 1;
         }
 
         // FUEL: 25, 8
         // HEALTH: 25, 19
         // BATTERY: 25, 30
         // TEMP: 25, 41
-        public final int type;
+        public final LabelType type;
         private final int fontColor, oX, oY;
         private final Font font;
         private final Component[] string;
 
-        private float getMax(int type){
-            return new float[]{((IVehicleAccess) car).refuel$getMaxFuel(), ((IVehicleAccess) car).refuel$getMaxHealth(), ((IVehicleAccess) car).refuel$getMaxBattery(), 100f}[type];
+        private float getMax(LabelType type){
+            return new float[]{((IVehicleAccess) car).refuel$getMaxFuel(), ((IVehicleAccess) car).refuel$getMaxHealth(), ((IVehicleAccess) car).refuel$getMaxBattery(), 100f}[type.getInt()];
         }
 
-        private float getNumber(int type){
-            return new float[]{getFuel(), getHealth(), getBattery(), getTemperature()}[type];
+        private float getNumber(LabelType type){
+            return new float[]{getFuel(), getHealth(), getBattery(), getTemperature()}[type.getInt()];
         }
 
-        public float getPercent(int type){
-            if(type == TEMPERATURE) return Mth.clamp(((((IVehicleAccess) car).refuel$getTemperature() + 50) / 150) * 100, 0, 100);
+        public float getPercent(LabelType type){
+            if(type == LabelType.TEMPERATURE) return Mth.clamp(((((IVehicleAccess) car).refuel$getTemperature() + 50) / 150) * 100, 0, 100);
             return Mth.clamp((getNumber(type) / getMax(type)) * 100, 0, 100);
         }
 
@@ -190,24 +197,24 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
             var offset = Mth.floor(40d * percent * 0.01);
             if(isHovered) {
                 var texOffset = Mth.floor(Mth.lerp(partialTick, 40d * percent * 0.01 * 0.25 * (lastHovered ? Math.min(4, lastTick - lastHoverTick + 1) : 0), 40d * percent * 0.01 * 0.25 * (lastHovered ? Math.min(4, car.tickCount - lastHoverTick + 1) : 0)));
-                guiGraphics.blit(CAR_GUI_TEXTURE, oX + 8, oY + 48 - texOffset, 176 + 11 * type, 40 - texOffset, 11, texOffset);
+                guiGraphics.blit(CAR_GUI_TEXTURE, oX + 8, oY + 48 - texOffset, 176 + 11 * type.getInt(), 40 - texOffset, 11, texOffset);
             }
             else if(car.tickCount != lastTick) lastHoverTick = car.tickCount;
             lastTick = car.tickCount;
             lastHovered = isHovered;
 
             String number = String.valueOf(round(percent, 2));
-            if(type == TEMPERATURE) number = String.valueOf(getTemperature());
+            if(type == LabelType.TEMPERATURE) number = String.valueOf(getTemperature());
             else if(ClientConfig.displayInUnits.get()) number = unit == Math.floor(unit) ? String.valueOf(Mth.floor(unit)) : String.valueOf(round(unit,2));
 
             var color = fontColor;
             if(isHovered) try {
-                var RGBA = NativeImage.read(Minecraft.getInstance().getResourceManager().open(CAR_GUI_TEXTURE)).getPixelRGBA(176 + 11 * type, 40 - offset);
+                var RGBA = NativeImage.read(Minecraft.getInstance().getResourceManager().open(CAR_GUI_TEXTURE)).getPixelRGBA(176 + 11 * type.getInt(), 40 - offset);
                     color = ((((((RGBA >> 24 & 255) << 8) + (RGBA & 255)) << 8) + (RGBA >> 8 & 255)) << 8) + (RGBA >> 16 & 255);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            guiGraphics.drawString(font, (ClientConfig.pinnedType.get() == type + 1 ? String.valueOf(ChatFormatting.PREFIX_CODE) + ChatFormatting.UNDERLINE.getChar() : "") + number, getX(), getY(), color, false);
+            guiGraphics.drawString(font, (ClientConfig.pinnedType.get() == type ? String.valueOf(ChatFormatting.PREFIX_CODE) + ChatFormatting.UNDERLINE.getChar() : "") + number, getX(), getY(), color, false);
             guiGraphics.drawString(font, string[isOtherwise(type)], getX() + font.width(number), getY(), fontColor, false);
             setWidth(font.width(number));
         }
@@ -218,8 +225,8 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
             if(this.clicked(mouseX, mouseY)){
-                if(ClientConfig.pinnedType.get() != type + 1) ClientConfig.pinnedType.set(type + 1);
-                else ClientConfig.pinnedType.set(0);
+                if(ClientConfig.pinnedType.get() != type) ClientConfig.pinnedType.set(type);
+                else ClientConfig.pinnedType.set(LabelType.NONE);
             }
             return super.mouseClicked(mouseX, mouseY, button);
         }
