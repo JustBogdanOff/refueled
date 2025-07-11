@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.car;
+package bogdan.refueled.mixin.common.car;
 
 import bogdan.refueled.RefueledMain;
 import bogdan.refueled.common.accessors.IVehicleAccess;

@@ -23,17 +23,15 @@ public class KeyEvent {
 
     @SubscribeEvent
     public void onKeyInput(InputEvent.Key event) {
-        Minecraft minecraft = Minecraft.getInstance();
-        Player player = minecraft.player;
-        if (player == null) {
-            return;
-        }
+        Minecraft mc = Minecraft.getInstance();
+
+        Player player = mc.player;
+        if (player == null) return;
+
         Entity car = player.getVehicle();
-        if (!isCar(car)) {
-            return;
-        }
+        if (!isCar(car)) return;
         if (player.equals(car.getControllingPassenger())) {
-            ((IVehicleAccess) car).refuel$updateControls(Minecraft.getInstance().options.keyUp.isDown(), Minecraft.getInstance().options.keyDown.isDown(), Minecraft.getInstance().options.keyLeft.isDown(), Minecraft.getInstance().options.keyRight.isDown(), player);
+            ((IVehicleAccess) car).refuel$updateControls(mc.options.keyUp.isDown(), mc.options.keyDown.isDown(), mc.options.keyLeft.isDown(), mc.options.keyRight.isDown(), player);
 
             if (RefueledMain.START_KEY.isDown()) {
                 if (!wasStartPressed) {
@@ -53,9 +51,7 @@ public class KeyEvent {
                     player.displayClientMessage(Component.translatable("message.center_vehicle"), true);
                     wasCenterPressed = true;
                 }
-            } else {
-                wasCenterPressed = false;
-            }
+            } else wasCenterPressed = false;
         }
 
         if (RefueledMain.CAR_GUI_KEY.isDown()) {
@@ -63,8 +59,6 @@ public class KeyEvent {
                 RefueledChannel.sendToServer(new VehicleGUI(player));
                 wasGuiPressed = true;
             }
-        } else {
-            wasGuiPressed = false;
-        }
+        } else wasGuiPressed = false;
     }
 }

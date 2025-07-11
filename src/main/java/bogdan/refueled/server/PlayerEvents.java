@@ -1,7 +1,7 @@
 package bogdan.refueled.server;
 
 import bogdan.refueled.config.ServerConfig;
-import bogdan.refueled.mixin.accessor.ILevelAccess;
+import bogdan.refueled.mixin.common.accessor.ILevelAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -10,7 +10,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import static bogdan.refueled.Utils.isCar;
 
-public class PlayerLevelEvent {
+public class PlayerEvents {
     public static final String REFUELED_KEY = "refueled_last_entity";
 
     @SubscribeEvent

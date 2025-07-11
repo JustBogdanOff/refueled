@@ -6,20 +6,28 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 
-public class RefueledHigh extends RefueledLoop {
+import static bogdan.refueled.Utils.isCar;
 
-    public RefueledHigh(Entity car, SoundEvent event, SoundSource category) {
+public class RefueledStarting extends RefueledLoop {
+
+    public RefueledStarting(Entity car, SoundEvent event, SoundSource category) {
         super(car, event, category);
+        this.looping = true;
     }
 
     @Override
     public void tick() {
-        pitch = ((IVehicleAccessClient) car).refuel$getPitch();
+        if (isCar(car)) {
+            pitch = ((IVehicleAccessClient) car).refuel$getBatterySoundPitchLevel();
+        }
         super.tick();
     }
 
     @Override
     public boolean shouldStopSound() {
-        return ((IVehicleAccess) car).refuel$getSpeed() == 0 || !((IVehicleAccess) car).refuel$isStarted();
+        if (!isCar(car)) {
+            return true;
+        }
+        return !((IVehicleAccess) car).refuel$isStarting();
     }
 }

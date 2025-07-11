@@ -1,15 +1,15 @@
-- Added fuel siphoning, achievable by any item modded fluid container
-- Added the canister, able to hold a bucket of any fluid
-- Added the battery, with a max capacity of 4000 FE
-- Updated the list configs so that they actually work
-- Road blocks server config now takes an additional value to each entry, representing the speed multiplier. Replaces the old global on-road multiplier
-- Added a repair items config and more
-- Compacted vehicle stats config into arrays of 6
-- Smoothed out the sloping system
-- Added a reminder message telling how to start the vehicle and open the gui
-- Updated the internal GUI
-- Implemented a new GUI for the truck's external 'truck bed' inventory, allowing for 72 slots of storage
-- No laws against nauseated driving, but no benefits either
-- Motorcycle no longer crashes when sloping against 2 block high obstacles
-- Ramming into entities now knocks them back
-- Vehicles now have their battery actually drained from while driving
++ Canister can no longer insert and extract from cauldrons
+| Instead the Canister is now able to place and pickup fluid like a normal bucket
++ Increased default Canister capacity to 2 buckets (from 1.5)
+- Battery life extended to update every 20 ticks, was previously every 5 ticks
+- Fuel drain reduced down to 0.2mB/t at 100% efficiency
+- Updated fuel config to take in decimal percentages instead of integer (i.e.: 95 -> 0.95)
+- Hovering over remaining fuel in the GUI shows what type of fuel is in the tank
+- Fixed vehicle explosions, now also spreading fire if there's more than 75% fuel left
+- Vehicle now crash properly instead of desyncing and ultimately disappearing on the client
+- Fixed loading client classes on dedicated servers
+- Passengers are now invulnerable in all vehicles except the motorcycle, making the vehicle tank the damage instead
+- Crashing into entities no longer crash the server, or kick if it's a player
+- Remaining passengers no longer get trapped midair whenever another passenger dismounts the vehicle
+- Stats in the vehicle GUI are now always dimly colored
+- Added a `refueled` command, which currently can only edit the fuel, health, battery and engine temperature of a selected vehicle

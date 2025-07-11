@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.accessor;
+package bogdan.refueled.mixin.common.accessor;
 
 import com.google.common.collect.ImmutableList;
 import net.minecraft.world.entity.Entity;

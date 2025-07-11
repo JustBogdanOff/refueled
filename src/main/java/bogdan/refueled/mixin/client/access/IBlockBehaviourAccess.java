@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.accessor;
+package bogdan.refueled.mixin.client.access;
 
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import org.spongepowered.asm.mixin.Mixin;

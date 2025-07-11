@@ -1,9 +1,10 @@
 package bogdan.refueled.client.events;
 
 import bogdan.refueled.RefueledMain;
+import bogdan.refueled.client.accessors.IVehicleAccessClient;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.config.ClientConfig;
-import bogdan.refueled.mixin.accessor.ICameraInvoke;
+import bogdan.refueled.mixin.client.access.ICameraInvoke;
 import com.dragn0007.dragnvehicles.vehicle.motorcycle.Motorcycle;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -29,7 +30,7 @@ public class RenderEvent {
                 return;
             }
             Camera camera = event.getCamera(); Entity car = getCar();
-            ((IVehicleAccess) car).refuel$offsetCamera((float) event.getPartialTick(), camera);
+            ((IVehicleAccessClient) car).refuel$offsetCamera((float) event.getPartialTick(), camera);
             if(!MC.options.getCameraType().isFirstPerson()) {
                 ((ICameraInvoke) camera).cam$move(
                         -((ICameraInvoke) camera).cam$getMaxZoom(ClientConfig.carZoom.get() - 4D), 0D, 0D
@@ -63,12 +64,14 @@ public class RenderEvent {
             Entity car = event.getEntity().getVehicle();
             Player player = event.getEntity();
             float factor = car instanceof Motorcycle ? IVehicleAccess.sizeFactor.floatValue() * 1.33f : IVehicleAccess.sizeFactor.floatValue();
-            var offsets = ((IVehicleAccess) car).refuel$getPlayerOffsets(event.getPartialTick(), player);
+            var offsets = ((IVehicleAccessClient) car).refuel$getPlayerOffsets(event.getPartialTick(), player);
 
+            if(player != MC.player)
+                car.onPassengerTurned(player);
             event.getPoseStack().pushPose();
             event.getPoseStack().translate(offsets.x, offsets.y, offsets.z);
             event.getPoseStack().scale(factor, factor, factor);
-            event.getPoseStack().mulPose(((IVehicleAccess) car).refuel$getPlayerRotation(event.getPartialTick()));
+            event.getPoseStack().mulPose(((IVehicleAccessClient) car).refuel$getPlayerRotation(event.getPartialTick()));
             //seatPos = seatPos.scale(1 / 0.9375);
         }
     }

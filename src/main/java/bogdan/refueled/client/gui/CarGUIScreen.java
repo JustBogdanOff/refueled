@@ -145,7 +145,7 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
         NONE, FUEL, HEALTH, BATTERY, TEMPERATURE;
 
         public int getInt(){
-            return List.of(NONE, FUEL, HEALTH, BATTERY, TEMPERATURE).indexOf(this);
+            return List.of(FUEL, HEALTH, BATTERY, TEMPERATURE).indexOf(this);
         }
     }
 
@@ -198,6 +198,8 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
             if(isHovered) {
                 var texOffset = Mth.floor(Mth.lerp(partialTick, 40d * percent * 0.01 * 0.25 * (lastHovered ? Math.min(4, lastTick - lastHoverTick + 1) : 0), 40d * percent * 0.01 * 0.25 * (lastHovered ? Math.min(4, car.tickCount - lastHoverTick + 1) : 0)));
                 guiGraphics.blit(CAR_GUI_TEXTURE, oX + 8, oY + 48 - texOffset, 176 + 11 * type.getInt(), 40 - texOffset, 11, texOffset);
+                if(type == LabelType.FUEL && lastTick - lastHoverTick >= 20)
+                    guiGraphics.renderTooltip(font, Component.translatable(((IVehicleAccess) car).refuel$getFluid().getFluidType().getDescriptionId()), mouseX, mouseY);
             }
             else if(car.tickCount != lastTick) lastHoverTick = car.tickCount;
             lastTick = car.tickCount;
@@ -208,9 +210,19 @@ public class CarGUIScreen extends AbstractContainerScreen<CarGUI> {
             else if(ClientConfig.displayInUnits.get()) number = unit == Math.floor(unit) ? String.valueOf(Mth.floor(unit)) : String.valueOf(round(unit,2));
 
             var color = fontColor;
-            if(isHovered) try {
+            try {
                 var RGBA = NativeImage.read(Minecraft.getInstance().getResourceManager().open(CAR_GUI_TEXTURE)).getPixelRGBA(176 + 11 * type.getInt(), 40 - offset);
+
+                if(isHovered)
                     color = ((((((RGBA >> 24 & 255) << 8) + (RGBA & 255)) << 8) + (RGBA >> 8 & 255)) << 8) + (RGBA >> 16 & 255);
+                else{
+                    byte alpha = Integer.valueOf(((RGBA >> 24 & 255) + (fontColor & 255)) / 2).byteValue(),
+                        red = Integer.valueOf(((RGBA & 255) + (fontColor >> 8 & 255)) / 2).byteValue(),
+                        green = Integer.valueOf(((RGBA >> 8 & 255) + (fontColor >> 16 & 255)) / 2).byteValue(),
+                        blue = Integer.valueOf(((RGBA >> 16 & 255) + (fontColor >> 24 & 255)) / 2).byteValue();
+
+                    color = (((alpha << 8) + red << 8) + green << 8) + blue;
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

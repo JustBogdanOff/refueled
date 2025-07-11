@@ -1,13 +1,14 @@
-package bogdan.refueled.mixin.car.client;
+package bogdan.refueled.mixin.client.vehicle;
 
+import bogdan.refueled.client.accessors.IVehicleAccessClient;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.client.sounds.RefueledHigh;
 import bogdan.refueled.client.sounds.RefueledIdle;
 import bogdan.refueled.client.sounds.RefueledStart;
 import bogdan.refueled.client.sounds.RefueledStarting;
 import bogdan.refueled.config.ClientConfig;
-import bogdan.refueled.mixin.accessor.IBlockBehaviourAccess;
-import bogdan.refueled.mixin.accessor.ICameraInvoke;
+import bogdan.refueled.mixin.client.access.IBlockBehaviourAccess;
+import bogdan.refueled.mixin.client.access.ICameraInvoke;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
 import com.dragn0007.dragnvehicles.vehicle.classic.Classic;
 import com.dragn0007.dragnvehicles.vehicle.motorcycle.Motorcycle;
@@ -44,7 +45,7 @@ import java.util.function.Function;
 import static bogdan.refueled.Utils.isSoundPlaying;
 
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
-public abstract class CarClientMixin extends Entity implements IVehicleAccess {
+public abstract class CarClientMixin extends Entity implements IVehicleAccessClient {
     public CarClientMixin(EntityType<?> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
     }
@@ -76,9 +77,9 @@ public abstract class CarClientMixin extends Entity implements IVehicleAccess {
 
         if(Minecraft.getInstance().player.getVehicle() != null){
             if(Minecraft.getInstance().player.getVehicle().equals(this) && refuel$isStarted()){
-                String speedInfo = Mth.floor((speed * 20f * 60f * 60f) / 1000f) + " KM/H";
+                String speedInfo = Mth.floor((speed * 20f * 60f * 60f) * 0.001f) + " KM/H";
                 if(ClientConfig.speedImperial.get())
-                    speedInfo = Mth.floor(((speed * 20f * 60f * 60f) / 1000f) / 1.609f) + " MPH";
+                    speedInfo = Mth.floor(((speed * 20f * 60f * 60f) * 0.001f) / 1.609f) + " MPH";
                 Minecraft.getInstance().player.displayClientMessage(Component.literal(speedInfo), true);
             }
         }

@@ -3,8 +3,8 @@ package bogdan.refueled.common.network;
 import bogdan.refueled.RefueledMain;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
@@ -32,23 +32,24 @@ public class VehicleCrash {
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
-        Player player = supplier.get().getSender();
+        ServerPlayer player = supplier.get().getSender();
         if(player == null){
             RefueledMain.LOGGER.error("Packet sender is null");
             return false;
         }
         Entity car = player.getVehicle();
         if(car == null){
-            RefueledMain.LOGGER.error("null vehicle when processing it's crash");
+            RefueledMain.LOGGER.error("null vehicle when processing its crash");
             return false;
         }
         if (!car.getUUID().equals(uuid)) {
-            RefueledMain.LOGGER.error("Mismatched packet and sender UUID");
+            RefueledMain.LOGGER.error("Mismatched packet and vehicle UUID");
             return false;
         }
 
         if(!isCar(car)) return false;
 
+        RefueledMain.LOGGER.debug("crashed the vehicle on the server");
         ((IVehicleAccess) car).refuel$onCollision(speed);
         return true;
     }

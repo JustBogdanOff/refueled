@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.accessor;
+package bogdan.refueled.mixin.client.access;
 
 import net.minecraft.client.Camera;
 import net.minecraft.world.phys.Vec3;

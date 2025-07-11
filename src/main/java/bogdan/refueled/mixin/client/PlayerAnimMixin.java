@@ -1,6 +1,6 @@
-package bogdan.refueled.mixin;
+package bogdan.refueled.mixin.client;
 
-import bogdan.refueled.common.accessors.IVehicleAccess;
+import bogdan.refueled.client.accessors.IVehicleAccessClient;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.world.entity.LivingEntity;
@@ -27,7 +27,7 @@ public class PlayerAnimMixin {
     )
     private void injectVehiclePitch(LivingEntity pEntity, float pLimbSwing, float pLimbSwingAmount, float pAgeInTicks, float pNetHeadYaw, float pHeadPitch, CallbackInfo ci){
         if(!(pEntity.getFallFlyingTicks() > 4) && !pEntity.isVisuallySwimming() && isCar(pEntity.getVehicle())){
-            this.head.xRot = pHeadPitch * 0.017453292F - (((IVehicleAccess) pEntity.getVehicle()).refuel$getAngle(pNetHeadYaw));
+            this.head.xRot = pHeadPitch * 0.017453292F - (((IVehicleAccessClient) pEntity.getVehicle()).refuel$getAngle(pNetHeadYaw));
         }
     }
 }

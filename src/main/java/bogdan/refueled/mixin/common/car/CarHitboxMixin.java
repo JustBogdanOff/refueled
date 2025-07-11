@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.car;
+package bogdan.refueled.mixin.common.car;
 
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import org.spongepowered.asm.mixin.Mixin;

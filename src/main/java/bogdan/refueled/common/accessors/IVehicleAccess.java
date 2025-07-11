@@ -1,46 +1,26 @@
 package bogdan.refueled.common.accessors;
 
 import bogdan.refueled.RefueledRegistry;
-import com.dragn0007.dragnvehicles.Animation;
-import net.minecraft.client.Camera;
-import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Quaternionf;
 
 public interface IVehicleAccess {
 
     Double sizeFactor = 0.66d;
-
-    // CLIENT
-    void refuel$displaySpeed(float speed);
-    // -> WHEELS
-    void refuel$animate(ModelPart modelPart, Animation animation, float wheelRotation);
+    // SERVER -> CLIENT
     void refuel$rotateWheels(float deltaRot, float rotSpeed, float speed);
-    void refuel$updateWheelRotation();
-    float refuel$getWheelRotation(float partialTick);
-    // -> SLOPING
-    void refuel$angleTick();
-    void refuel$offsetCamera(float partialTick, Camera camera);
-    float refuel$getAngle(float yawDeg);
-    float refuel$getVerticalOffset(float partialTick);
-    Vec3 refuel$getPlayerOffsets(float partialTick, Player player);
-    Quaternionf refuel$getPlayerRotation(float partialTick);
-    Quaternionf refuel$getRotation(float partialTick);
-    // -> POSITION & ROTATION
     void refuel$updateClientPos();
-    void refuel$tickLerp();
     void refuel$updateLastYRot();
-    // -> SOUND
+    void refuel$tickLerp();
+    void refuel$displaySpeed(float speed);
+    void refuel$updateWheelRotation();
+    void refuel$angleTick();
     void refuel$updateSounds();
-    void refuel$playSoundLoop(AbstractTickableSoundInstance loop, Level level);
-    float refuel$getBatterySoundPitchLevel();
+
     default float refuel$getPitch(){
         return 1f + (Math.abs(refuel$getSpeed()) / (refuel$getMaxSpeed() * refuel$getModifier()));
     }
@@ -51,7 +31,7 @@ public interface IVehicleAccess {
     Fluid refuel$getFluid();
     void refuel$initTemperature();
     void refuel$centerCar();
-    void refuel$onCollision(double speed);
+    void refuel$onCollision(float speed);
     void refuel$openGUI(Player player);
     void refuel$setStarting(boolean starting, boolean playFailSound);
     void refuel$updateControls(boolean forward, boolean backward, boolean left, boolean right, Player player);
@@ -92,7 +72,6 @@ public interface IVehicleAccess {
     }
     Vec3 refuel$getSeatPosition(Entity player);
 
-
     Container refuel$getContainer();
 
     // ENTITY DATA
@@ -104,6 +83,9 @@ public interface IVehicleAccess {
     float refuel$getSpeed();
     void refuel$setBattery(int level);
     void refuel$setHealth(float health);
+    void refuel$setFuel(int fuel);
+    void refuel$setFuelType(String type);
+    void refuel$setTemperature(float heat);
 
     boolean refuel$isStarted();
     boolean refuel$isStarting();

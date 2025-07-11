@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.accessor;
+package bogdan.refueled.mixin.common.accessor;
 
 import org.spongepowered.asm.mixin.Mixin;
 import net.minecraft.world.entity.Entity;

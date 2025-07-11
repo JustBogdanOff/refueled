@@ -1,5 +1,6 @@
-package bogdan.refueled.mixin.car.client;
+package bogdan.refueled.mixin.client.vehicle;
 
+import bogdan.refueled.client.accessors.IVehicleAccessClient;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import com.dragn0007.dragnvehicles.vehicle.car.CarRender;
 import com.dragn0007.dragnvehicles.vehicle.classic.ClassicRender;
@@ -86,7 +87,7 @@ public abstract class CarRenderMixin {
             )
     )
     private void injectSloping(@Coerce Object car, float rotation, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, CallbackInfo ci){
-        poseStack.translate(0, -((IVehicleAccess) car).refuel$getVerticalOffset(partialTick), 0);
-        poseStack.mulPose(((IVehicleAccess) car).refuel$getRotation(partialTick));
+        poseStack.translate(0, -((IVehicleAccessClient) car).refuel$getVerticalOffset(partialTick), 0);
+        poseStack.mulPose(((IVehicleAccessClient) car).refuel$getRotation(partialTick));
     }
 }

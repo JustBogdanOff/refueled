@@ -72,9 +72,6 @@ repositories {
             includeGroup "curse.maven"
         }
     }
-    maven {
-        url "https://api.modrinth.com/maven"
-    }
 }
 
 dependencies {
@@ -89,10 +86,6 @@ dependencies {
     runtimeOnly fg.deobf("curse.maven:the-one-probe-245211:5159287")
     // create
     implementation fg.deobf("curse.maven:create-328085:6323270")
-    // mekanism
-    implementation fg.deobf("curse.maven:mekanism-268560:6258796")
-    implementation fg.deobf("curse.maven:mekanism-generators-268566:6258799")
-    implementation fg.deobf("curse.maven:mekanism-tools-268567:6258800")
 }
 
 tasks.named('processResources', ProcessResources).configure {

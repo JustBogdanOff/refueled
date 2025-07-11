@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin.accessor;
+package bogdan.refueled.mixin.common.accessor;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Biome;

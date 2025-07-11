@@ -1,4 +1,4 @@
-package bogdan.refueled.mixin;
+package bogdan.refueled.mixin.client;
 
 import bogdan.refueled.RefueledMain;
 import bogdan.refueled.config.ClientConfig;

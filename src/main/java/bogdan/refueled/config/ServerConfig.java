@@ -62,7 +62,7 @@ public class ServerConfig {
                     .comment("Each of these configs are represented using an array that affect in order respectively", "Modern cars, Classic cars, Trucks, SUVs, Sport cars, Motorcycles");
         vehicleSpeed = builder
                 .translation("itemGroup.refueled")
-                .comment("Maximal speeds the vehicles can reach in blocks per tick")
+                .comment(" Maximal speeds the vehicles can reach in blocks per tick")
                 .define("speed", List.of(
                         // body * engine * dragn007
                         0.85 * 0.75 * 1.2,
@@ -74,7 +74,7 @@ public class ServerConfig {
                 ), ServerConfig::validateNumber);
 
         vehicleRevSpeed = builder
-                .comment("Vehicles' top reverse speeds in blocks per tick")
+                .comment(" Vehicles' top reverse speeds in blocks per tick")
                 .define("reverse_speed", List.of(
                         // engine * dragn007
                         0.2 * 1.2,
@@ -86,7 +86,7 @@ public class ServerConfig {
                 ), ServerConfig::validateNumber);
 
         vehicleAcc = builder
-                .comment("Acceleration for the vehicles")
+                .comment(" Acceleration for the vehicles")
                 .define("acceleration", List.of(
                         // body * engine * dragn007
                         0.04 * 0.95 * 1.2,
@@ -98,7 +98,7 @@ public class ServerConfig {
                 ), ServerConfig::validateNumber);
 
         vehicleHealth = builder
-                .comment("Acceleration for the vehicles")
+                .comment(" Vehicles' max health")
                 .define("health", List.of(
                         100d,
                         100d,
@@ -109,7 +109,7 @@ public class ServerConfig {
                 ), ServerConfig::validateNumber);
 
         vehicleFuelEff = builder
-                .comment("Vehicles' fuel consumption", "Higher = More efficient")
+                .comment(" Vehicles' fuel consumption", "Higher = More efficient")
                 .define("fuel_efficiency", List.of(
                         0.7 * 0.5,
                         0.8 * 0.5,
@@ -120,8 +120,8 @@ public class ServerConfig {
                 ), ServerConfig::validateNumber);
 
         vehicleSteering = builder
-                .comment("How much the vehicles can steer at max speed and almost full stop",
-                        "Having both values equal will keep steering constant, irrelevant of speed")
+                .comment(" How much the vehicles can steer at max speed and almost full stop",
+                        " Having both values equal will keep steering constant, irrelevant of speed")
                 .define("steering", List.of(
                         List.of(1.1, 3.3),
                         List.of(1.1, 3.3),
@@ -132,77 +132,77 @@ public class ServerConfig {
                 ), ServerConfig::validateSteering);
 
         vehicleStepHeight = builder
-                .comment("Vehicles' max stepping height")
+                .comment(" Vehicles' max stepping height")
                 .define("step_height", List.of(
                         1d, 1d, 2d, 1.6, 0.6, 2d
                 ), ServerConfig::validateNumber);
 
         vehicleRamDamage = builder
-                .comment("Baseline damage to calculate onto mobs hit by the vehicles")
+                .comment(" Baseline damage to calculate onto mobs hit by the vehicles")
                 .define("ram_damage", List.of(
                         20d, 20d, 30d, 25d, 15d, 10d
                 ), ServerConfig::validateNumber);
 
         vehicleFuel = builder
-                .comment("Vehicles' fuel capacity")
+                .comment(" Vehicles' fuel capacity")
                 .define("fuel_capacity", List.of(
                         1500, 1500, 2000, 2000, 1000, 1000
                 ), ServerConfig::validateNumber);
 
         vehicleBattery = builder
-                .comment("Vehicles' fuel capacity")
+                .comment(" Vehicles' fuel capacity")
                 .define("battery_capacity", List.of(
                         8000, 8000, 10000, 10000, 6000, 4000
                 ), ServerConfig::validateNumber);
         builder.pop();
 
         useBattery = builder
-                .comment("Whether to use the battery")
+                .comment(" Whether to use the battery")
                 .define("use_battery", false);
 
         damageEntities = builder
-                .comment("Whether to damage any entities in the way of the vehicle")
+                .comment(" Whether to damage any entities in the way of the vehicle")
                 .define("damage_entities", true);
 
         collideWithEntities = builder
-                .comment("Whether to stop the car as if it came in collision with a block when impacting an entity")
+                .comment(" Whether to stop the car as if it came in collision with a block when impacting an entity")
                 .define("collide_with_entities", false);
 
         offroadSpeed = builder
-                .comment("Speed modifier for DragN's vehicles on non-road blocks")
+                .comment(" Speed modifier for DragN's vehicles on non-road blocks")
                 .defineInRange("offroad_speed", 1d, 0.001d, 10d);
 
         explodeOnDeath = builder
-                .comment("Whether the vehicle should cause an explosion on death")
+                .comment(" Whether the vehicle should cause an explosion on death")
                 .define("explode", false);
 
         canisterMax = builder
-                .comment("How much can the canister hold of a fluid, in [mB]")
-                .defineInRange("canister_max", 1500, 400, 16000);
+                .comment(" How much can the canister hold of a fluid, in [mB]")
+                .defineInRange("canister_max", 2000, 400, 16000);
 
         batteryMax = builder
-                .comment("How much the battery can hold FE")
+                .comment(" How much the battery can hold FE")
                 .defineInRange("battery_max", 6000, 400, 16000);
 
         vehiclePersist = builder
-                .comment("Whether vehicles should persist in-game when it's only passenger disconnects")
+                .comment(" Whether vehicles should persist in-game when it's only passenger disconnects")
                 .define("vehicle_persist", true);
 
         spawnFull = builder
-                .comment("Whether spawn eggs should spawn full tank and battery vehicles")
+                .comment(" Whether spawn eggs should spawn full tank and battery vehicles")
                 .define("spawn_full", true);
 
         repairItems = builder
-                .comment("What items should be considered vehicle-repairable, along with how much of said item is required to repair, and how much HP should it repair", "Any starting with '#' are considered an item tag")
+                .comment(" What items should be considered vehicle-repairable, along with how much of said item is required to repair, and how much HP should it repair", "Any starting with '#' are considered an item tag")
                 .defineList("repair_items", List.of(List.of("minecraft:iron_ingot", "4", "4.5"), List.of("#forge:ingots/steel", "1", "6")), ServerConfig::validateRepairItem);
 
         fuelEff = builder
-                .comment("Fluids defined as acceptable fuels for vehicles, along with their efficiency")
-                .defineList("fuels", List.of(List.of("minecraft:lava", "100")), ServerConfig::validateFuel);
+                .comment(" Fluids defined as acceptable fuels for vehicles, along with their efficiency")
+                .defineList("fuels", List.of(List.of("minecraft:lava", "1")), ServerConfig::validateFuel);
 
         builder.push("road_blocks");
             roadBlocks = builder
-                    .comment("A list of blocks considered on-road for cars", "Any starting with '#' are considered a block tag")
+                    .comment(" A list of blocks considered on-road for cars", "Any starting with '#' are considered a block tag")
                     .defineListAllowEmpty("blocks", List.of(List.of("minecraft:smooth_stone", "1.25"), List.of("#refueled:road_blocks", "1.5")), ServerConfig::validateBlock);
         builder.pop();
     }

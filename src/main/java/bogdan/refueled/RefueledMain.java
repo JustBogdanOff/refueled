@@ -3,18 +3,17 @@ package bogdan.refueled;
 import bogdan.refueled.client.gui.CarGUIScreen;
 import bogdan.refueled.client.events.KeyEvent;
 import bogdan.refueled.client.events.RenderEvent;
-import bogdan.refueled.client.gui.ConfigScreen;
 import bogdan.refueled.client.gui.TruckGUIScreen;
-import bogdan.refueled.server.PlayerLevelEvent;
+import bogdan.refueled.server.PlayerEvents;
 import bogdan.refueled.common.network.RefueledChannel;
 import bogdan.refueled.config.ClientConfig;
 import bogdan.refueled.config.ServerConfig;
+import bogdan.refueled.server.RefueledCommands;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -35,14 +34,14 @@ public class RefueledMain {
 
     public RefueledMain() {
         ServerConfig.register(ModLoadingContext.get());
-        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         RefueledRegistry.init(modEventBus);
         modEventBus.addListener(this::commonSetup);
+        MinecraftForge.EVENT_BUS.register(new RefueledCommands());
 
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-            // ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class, () -> new ConfigScreenHandler.ConfigScreenFactory((mc, prevScreen) -> new ConfigScreen()));
+            ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
             modEventBus.addListener(this::onRegisterKeybinds);
             modEventBus.addListener(this::clientSetup);
         });
@@ -50,7 +49,7 @@ public class RefueledMain {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         RefueledChannel.register();
-        MinecraftForge.EVENT_BUS.register(new PlayerLevelEvent());
+        MinecraftForge.EVENT_BUS.register(new PlayerEvents());
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -67,9 +66,9 @@ public class RefueledMain {
     public static KeyMapping CAR_GUI_KEY, START_KEY, CENTER_KEY;
 
     public void onRegisterKeybinds(RegisterKeyMappingsEvent event){
-        CAR_GUI_KEY = new KeyMapping("key.refueled_car_gui", GLFW.GLFW_KEY_I, "category.refueled");
-        START_KEY = new KeyMapping("key.refueled_car_start", GLFW.GLFW_KEY_R, "category.refueled");
-        CENTER_KEY = new KeyMapping("key.refueled_center_car", GLFW.GLFW_KEY_SPACE, "category.refueled");
+        CAR_GUI_KEY = new KeyMapping("key.refueled.car_gui", GLFW.GLFW_KEY_I, "category.refueled");
+        START_KEY = new KeyMapping("key.refueled.car_start", GLFW.GLFW_KEY_R, "category.refueled");
+        CENTER_KEY = new KeyMapping("key.refueled.center_car", GLFW.GLFW_KEY_SPACE, "category.refueled");
 
         event.register(CAR_GUI_KEY);
         event.register(START_KEY);
