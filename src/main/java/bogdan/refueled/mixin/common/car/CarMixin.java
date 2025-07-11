@@ -1,5 +1,6 @@
 package bogdan.refueled.mixin.common.car;
 
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.gui.TruckGUI;
 import bogdan.refueled.common.network.*;
@@ -75,7 +76,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static bogdan.refueled.Utils.*;
 import static bogdan.refueled.server.PlayerEvents.REFUELED_KEY;
 
-@Debug(export = true)
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
 public abstract class CarMixin extends Entity implements IVehicleAccess, MenuProvider {
     public CarMixin(EntityType<?> pEntityType, Level pLevel) {
