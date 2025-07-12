@@ -239,6 +239,9 @@ public abstract class CarClientMixin extends Entity implements IVehicleAccessCli
     }
 
     public void refuel$angleTick(){
+        if(!ClientConfig.sloping.get())
+            return;
+
         refuel$lastAngleOffsets = refuel$angleOffsets;
         double modelToStackFactor = 1 / 16d;
 

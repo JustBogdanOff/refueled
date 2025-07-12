@@ -77,7 +77,9 @@ public class RefueledRegistry {
 
     public static final ResourceKey<DamageType>
             vehicleCollision = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(RefueledMain.MODID, "hit_by_vehicle")),
-            vehicleExplosion = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(RefueledMain.MODID, "hit_by_vehicle_death"));
+            vehicleExplosion = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(RefueledMain.MODID, "vehicle_explosion")),
+            crashedVehicle = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(RefueledMain.MODID, "crashed")),
+            bergentrucked = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(RefueledMain.MODID, "bergentrucked"));
 
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, RefueledMain.MODID);
 

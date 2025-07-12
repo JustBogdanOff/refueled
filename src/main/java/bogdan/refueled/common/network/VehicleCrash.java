@@ -48,8 +48,6 @@ public class VehicleCrash {
         }
 
         if(!isCar(car)) return false;
-
-        RefueledMain.LOGGER.debug("crashed the vehicle on the server");
         ((IVehicleAccess) car).refuel$onCollision(speed);
         return true;
     }

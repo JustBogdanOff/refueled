@@ -19,7 +19,7 @@ public class RefueledChannel {
     public static void register() {
         SimpleChannel net = NetworkRegistry.ChannelBuilder
                 .named(new ResourceLocation(RefueledMain.MODID, "refueled"))
-                .networkProtocolVersion(() -> "1.0")
+                .networkProtocolVersion(() -> "2.1.0")
                 .clientAcceptedVersions(s -> true)
                 .serverAcceptedVersions(s -> true)
                 .simpleChannel();

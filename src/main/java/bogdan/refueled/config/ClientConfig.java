@@ -16,6 +16,7 @@ public class ClientConfig {
     public static final ForgeConfigSpec.BooleanValue displayInUnits;
     public static final ForgeConfigSpec.EnumValue<CarGUIScreen.LabelType> pinnedType;
     public static final ForgeConfigSpec.BooleanValue reminderMessage;
+    public static final ForgeConfigSpec.BooleanValue sloping;
 
     static {
         builder.push("cars");
@@ -51,6 +52,11 @@ public class ClientConfig {
         reminderMessage = builder
                 .comment("Whether the player should be reminded how to start or open the vehicle's GUI")
                 .define("reminder", true);
+
+        builder.push("experimental");
+            sloping = builder
+                    .comment("Makes the vehicles angle relative to blocks around it", "Only rotates on one axis")
+                    .define("sloping", false);
 
         builder.pop();
         SPEC = builder.build();

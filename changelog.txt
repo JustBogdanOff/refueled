@@ -1,15 +1,9 @@
-+ Canister can no longer insert and extract from cauldrons
-| Instead the Canister is now able to place and pickup fluid like a normal bucket
-+ Increased default Canister capacity to 2 buckets (from 1.5)
-- Battery life extended to update every 20 ticks, was previously every 5 ticks
-- Fuel drain reduced down to 0.2mB/t at 100% efficiency
-- Updated fuel config to take in decimal percentages instead of integer (i.e.: 95 -> 0.95)
-- Hovering over remaining fuel in the GUI shows what type of fuel is in the tank
-- Fixed vehicle explosions, now also spreading fire if there's more than 75% fuel left
-- Vehicle now crash properly instead of desyncing and ultimately disappearing on the client
-- Fixed loading client classes on dedicated servers
-- Passengers are now invulnerable in all vehicles except the motorcycle, making the vehicle tank the damage instead
-- Crashing into entities no longer crash the server, or kick if it's a player
-- Remaining passengers no longer get trapped midair whenever another passenger dismounts the vehicle
-- Stats in the vehicle GUI are now always dimly colored
-- Added a `refueled` command, which currently can only edit the fuel, health, battery and engine temperature of a selected vehicle
+- Added `sloping` to the client config, defaulting to false
+- Added `solid_entities` config, granting the ability to exclude entities from being ran over (or allowing them to be, depends on `collide_with_entities`)
+- Updated crash detection, with an additional tick of delay
+- Made the vehicles pull configs actively, no longer requiring a world restart for changes to take effect
+- Fixed vehicles not spawning because of `ClassCastException` error
+- Crashing with the motorcycle now deals damage to the driver
+- Increased speed required for a crash to 80%, dealing double damage to the vehicle above 100
+- Vehicles can now be nametagged
+- Speed requirement to damage run over mobs reduced to 0.3m/s

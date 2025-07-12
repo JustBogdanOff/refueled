@@ -31,6 +31,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.*;
 import net.minecraft.world.damagesource.DamageSource;
@@ -43,13 +44,19 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
@@ -67,7 +74,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nonnull;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -75,7 +81,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static bogdan.refueled.Utils.*;
 import static bogdan.refueled.server.PlayerEvents.REFUELED_KEY;
 
-@Debug(export = true)
 @Mixin(value = {Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class})
 public abstract class CarMixin extends Entity implements IVehicleAccess, MenuProvider {
     public CarMixin(EntityType<?> pEntityType, Level pLevel) {
@@ -102,27 +107,14 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
      *     - update the sloping system block collection
      **/
 
-
     @Unique
-    private final static HashMap<String, Double> refuel$configData = new HashMap<>();
+    private final static int refuel$type = List.of(Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class).indexOf(CarMixin.class);
 
     @Inject(
             method = "<init>",
             at = @At("TAIL")
     )
     private void refuel$addInit(EntityType<?> entityType, Level level, CallbackInfo ci) {
-        var type = List.of(Car.class, Classic.class, Truck.class, SUV.class, SportCar.class, Motorcycle.class).indexOf(CarMixin.class);
-        refuel$configData.put("maxSpeed", ServerConfig.vehicleSpeed.get().get(type));
-        refuel$configData.put("maxReverseSpeed", ServerConfig.vehicleRevSpeed.get().get(type));
-        refuel$configData.put("acceleration", ServerConfig.vehicleAcc.get().get(type));
-        refuel$configData.put("stepHeight", ServerConfig.vehicleStepHeight.get().get(type));
-        refuel$configData.put("ramDamage", ServerConfig.vehicleRamDamage.get().get(type));
-        refuel$configData.put("fuelEfficiency", ServerConfig.vehicleFuelEff.get().get(type));
-        refuel$configData.put("minSteer", ServerConfig.vehicleSteering.get().get(type).get(0));
-        refuel$configData.put("maxSteer", ServerConfig.vehicleSteering.get().get(type).get(1));
-        refuel$configData.put("maxFuel", ServerConfig.vehicleFuel.get().get(type).doubleValue());
-        refuel$configData.put("battery", ServerConfig.vehicleBattery.get().get(type).doubleValue());
-
         refuel$internalInventory = new SimpleContainer(27);
         refuel$lazyFluid = LazyOptional.of(() -> new IFluidHandler() {
             @Override
@@ -246,13 +238,21 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             cancellable = true
     )
     private void refuel$injectSiphon(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-        if (isCar(player.getItemInHand(hand).getItem()) || player.getItemInHand(hand).getItem() instanceof BucketItem) {
+        ItemStack item = player.getItemInHand(hand);
+        if(item.getItem() == Items.NAME_TAG){
+            this.setCustomName(item.getHoverName());
+            item.shrink(1);
+            cir.setReturnValue(InteractionResult.sidedSuccess(level().isClientSide));
+            return;
+        }
+
+        if (isCar(item.getItem()) || item.getItem() instanceof BucketItem) {
             cir.setReturnValue(InteractionResult.FAIL);
             return;
         }
 
-        if (player.isShiftKeyDown() && player.getItemInHand(hand).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) {
-            IFluidHandlerItem otherHandler = player.getItemInHand(hand).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
+        if (player.isShiftKeyDown() && item.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) {
+            IFluidHandlerItem otherHandler = item.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
             IFluidHandler handler = this.getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
             FluidStack fluidStack = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
                     otherFluidStack = otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
@@ -689,9 +689,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     }
 
     @Unique
-    private boolean refuel$collidedLastTick;
-
-    @Unique
     private final boolean[] refuel$lastInputs = new boolean[4], refuel$lastTickInputs = new boolean[4];
     @Unique
     private boolean[] refuel$randomInputs = new boolean[2];
@@ -712,8 +709,8 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         if (nausea != null) {
             amp = nausea.getAmplifier();
             if (tickCount % (random.nextInt(amp) + 1) == 0) refuel$randomInputs = new boolean[]{
-                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 20) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 20))) == 0 ? random.nextBoolean() : refuel$isLeft(),
-                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 20) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 20))) == 0 ? random.nextBoolean() : refuel$isRight()
+                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isLeft(),
+                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isRight()
             };
         } else refuel$drunkTicks = new int[4];
 
@@ -793,16 +790,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             yRotO = delta + getYRot();
         }
 
-        if (horizontalCollision) {
-            if (level().isClientSide && !refuel$collidedLastTick) {
-                refuel$onCollision(speed);
-                refuel$collidedLastTick = true;
-            }
-        } else {
-            setDeltaMovement(refuel$calculateMotionX(refuel$getSpeed(), getYRot()), getDeltaMovement().y, refuel$calculateMotionZ(refuel$getSpeed(), getYRot()));
-            if (level().isClientSide)
-                refuel$collidedLastTick = false;
-        }
+        setDeltaMovement(refuel$calculateMotionX(refuel$getSpeed(), getYRot()), getDeltaMovement().y, refuel$calculateMotionZ(refuel$getSpeed(), getYRot()));
 
         move(MoverType.SELF, getDeltaMovement());
     }
@@ -930,19 +918,21 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             RefueledChannel.sendToServer(new VehicleCrash(this, speed));
         }
         refuel$setSpeed(0);
-        setDeltaMovement(0D, getDeltaMovement().y, 0D);
+        setDeltaMovement(0, 0, 0);
 
-        float percSpeed = speed / refuel$getMaxSpeed();
+        float percSpeed = speed / refuel$getMaxSpeed(),
+                totalDamage;
+        totalDamage = percSpeed * 5;
+        refuel$playCrashSound();
+        refuel$setStarted(false);
 
-        if (percSpeed > 0.7F) {
-            refuel$addDamage(percSpeed * 5);
-            refuel$playCrashSound();
+        if (percSpeed > 1)
+            totalDamage += percSpeed * 5;
 
-            if (percSpeed > 0.9F) {
-                refuel$addDamage(percSpeed * 5);
-                refuel$setStarted(false);
-                refuel$playStopSound();
-            }
+        refuel$addDamage(totalDamage);
+        //noinspection EqualsBetweenInconvertibleTypes,ConstantExpression,ConstantValue
+        if(CarMixin.class.equals(Motorcycle.class) && refuel$getDriver() != null){
+            refuel$getDriver().hurt(new DamageSource(level().registryAccess().registry(Registries.DAMAGE_TYPE).get().getHolderOrThrow(RefueledRegistry.crashedVehicle), this, refuel$getDriver()), totalDamage / 4);
         }
     }
 
@@ -1168,22 +1158,40 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     @Unique
     private final BlockingQueue<Runnable> refuel$tasks = new LinkedBlockingQueue<>();
 
+    @Unique
+    private void refuel$addTask(LivingEntity mob, DamageSource source, double amount){
+        refuel$tasks.add(() -> {
+            if(!ServerConfig.isEntityOnList(mob))
+                mob.knockback((refuel$getSpeed() / refuel$getMaxSpeed()) * Math.max(amount - mob.getHealth(), 1), getX() - mob.getX(), getZ() - mob.getZ());
+            mob.hurt(source, (float) amount);
+        });
+    }
+
     @Override
     public boolean canCollideWith(@NotNull Entity entity) {
         if (!level().isClientSide && ServerConfig.damageEntities.get() && entity instanceof LivingEntity mob && !getPassengers().contains(entity)) {
-            if (entity.getBoundingBox().intersects(getBoundingBox()) && refuel$getSpeed() > 0.35F) {
+            if (entity.getBoundingBox().intersects(getBoundingBox()) && refuel$getSpeed() > 0.3) {
                 double damage = refuel$getSpeed() * refuel$getRamDamage();
-                refuel$tasks.add(() -> {
-                    mob.knockback(refuel$getSpeed() / refuel$getMaxSpeed(), getX() - mob.getX(), getZ() - mob.getZ());
-                    mob.hurt(new DamageSource(level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(RefueledRegistry.vehicleCollision), this, refuel$getDriver(), position()), (float) damage);
-                });
+                DamageSource source = new DamageSource(level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(RefueledRegistry.vehicleCollision), this, refuel$getDriver());
+                //noinspection ConstantValue,EqualsBetweenInconvertibleTypes
+                if(CarMixin.class.equals(Truck.class) && this.getCustomName().getString().equalsIgnoreCase("bergentrück") && refuel$getDriver() != null && refuel$getDriver().getItemInHand(InteractionHand.MAIN_HAND).getItem() == Items.TRIDENT){
+                    damage *= 3.4;
+                    source = new DamageSource(level().registryAccess().registry(Registries.DAMAGE_TYPE).get().getHolderOrThrow(RefueledRegistry.bergentrucked), this, refuel$getDriver());
+                }
+                refuel$addTask(mob, source, damage);
             }
         }
 
-        if (!ServerConfig.collideWithEntities.get()) {
-            if (!isCar(entity)) {
+        boolean onList = ServerConfig.isEntityOnList(entity);
+        if (ServerConfig.collideWithEntities.get()) {
+            // If all entities are walls, then consider it a whitelist
+            if(!isCar(entity) && onList)
+                return true;
+        }
+        else{
+            // If all can be ran over, consider it a blacklist
+            if(!isCar(entity) || onList)
                 return false;
-            }
         }
 
         return (entity.canBeCollidedWith() || entity.isPushable()) && !isPassengerOfSameVehicle(entity);
@@ -1648,47 +1656,47 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     }
 
     public int refuel$getMaxBattery(){
-        return refuel$configData.get("battery").intValue();
+        return ServerConfig.vehicleBattery.get().get(refuel$type).intValue();
     }
 
     public float refuel$getMaxSpeed() {
-        return refuel$configData.get("maxSpeed").floatValue();
+        return ServerConfig.vehicleMaxSpeed.get().get(refuel$type).floatValue();
     }
 
     public float refuel$getMaxReverseSpeed() {
-        return refuel$configData.get("maxReverseSpeed").floatValue();
+        return ServerConfig.vehicleMaxRevSpeed.get().get(refuel$type).floatValue();
     }
 
     public float refuel$getAcceleration() {
-        return refuel$configData.get("acceleration").floatValue();
+        return ServerConfig.vehicleAcc.get().get(refuel$type).floatValue();
     }
 
     @Unique
     public float refuel$getRamDamage() {
-        return refuel$configData.get("ramDamage").floatValue();
+        return ServerConfig.vehicleRamDamage.get().get(refuel$type).floatValue();
     }
 
     @Unique
     public float refuel$getEfficiency(Fluid fluid){
-        return refuel$configData.get("fuelEfficiency").floatValue() * ServerConfig.getFuelEfficiency(fluid);
+        return ServerConfig.vehicleFuelEff.get().get(refuel$type).floatValue() * ServerConfig.getFuelEfficiency(fluid);
     }
 
     @Unique
     public float refuel$getHighSpeedSteering(){
-        return refuel$configData.get("minSteer").floatValue();
+        return ServerConfig.vehicleSteering.get().get(refuel$type).get(0).floatValue();
     }
 
     @Unique
     public float refuel$getLowSpeedSteering(){
-        return refuel$configData.get("maxSteer").floatValue();
+        return ServerConfig.vehicleSteering.get().get(refuel$type).get(1).floatValue();
     }
 
     public int refuel$getMaxFuel(){
-        return refuel$configData.get("maxFuel").intValue();
+        return ServerConfig.vehicleFuel.get().get(refuel$type).intValue();
     }
 
     public float getStepHeight(){
-        return refuel$configData.get("stepHeight").floatValue();
+        return ServerConfig.vehicleStepHeight.get().get(refuel$type).floatValue();
     }
 
     @Unique
@@ -1764,4 +1772,170 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         }
     }
+
+    public void move(@NotNull MoverType pType, @NotNull Vec3 pPos) {
+        if (this.noPhysics) {
+            this.setPos(this.getX() + pPos.x, this.getY() + pPos.y, this.getZ() + pPos.z);
+        } else {
+            this.wasOnFire = this.isOnFire();
+            if (pType == MoverType.PISTON) {
+                pPos = this.limitPistonMovement(pPos);
+                if (pPos.equals(Vec3.ZERO)) {
+                    return;
+                }
+            }
+
+            this.level().getProfiler().push("move");
+            if (this.stuckSpeedMultiplier.lengthSqr() > 1.0E-7) {
+                pPos = pPos.multiply(this.stuckSpeedMultiplier);
+                this.stuckSpeedMultiplier = Vec3.ZERO;
+                this.setDeltaMovement(Vec3.ZERO);
+            }
+
+            pPos = this.maybeBackOffFromEdge(pPos, pType);
+            Vec3 vec3 = refuel$vehicleCollide(pPos);
+            double d0 = vec3.lengthSqr();
+            if (d0 > 1.0E-7) {
+                if (this.fallDistance != 0.0F && d0 >= (double)1.0F) {
+                    BlockHitResult blockhitresult = this.level().clip(new ClipContext(this.position(), this.position().add(vec3), ClipContext.Block.FALLDAMAGE_RESETTING, net.minecraft.world.level.ClipContext.Fluid.WATER, this));
+                    if (blockhitresult.getType() != HitResult.Type.MISS) {
+                        this.resetFallDistance();
+                    }
+                }
+
+                this.setPos(this.getX() + vec3.x, this.getY() + vec3.y, this.getZ() + vec3.z);
+            }
+
+            this.level().getProfiler().pop();
+            this.level().getProfiler().push("rest");
+            //noinspection SuspiciousNameCombination
+            boolean flag4 = !Mth.equal(pPos.x, vec3.x);
+            boolean flag = !Mth.equal(pPos.z, vec3.z);
+            this.horizontalCollision = flag4 || flag;
+            this.verticalCollision = pPos.y != vec3.y;
+            this.verticalCollisionBelow = this.verticalCollision && pPos.y < (double)0.0F;
+            if (this.horizontalCollision) {
+                this.minorHorizontalCollision = this.isHorizontalCollisionMinor(vec3);
+            } else {
+                this.minorHorizontalCollision = false;
+            }
+
+            this.setOnGroundWithKnownMovement(this.verticalCollisionBelow, vec3);
+            BlockPos blockpos = this.getOnPos(0.2F);
+            BlockState blockstate = this.level().getBlockState(blockpos);
+            this.checkFallDamage(vec3.y, this.onGround(), blockstate, blockpos);
+            if (this.isRemoved()) {
+                this.level().getProfiler().pop();
+            } else {
+                if (this.horizontalCollision) {
+                    Vec3 vec31 = this.getDeltaMovement();
+                    this.setDeltaMovement(flag4 ? (double)0.0F : vec31.x, vec31.y, flag ? (double)0.0F : vec31.z);
+                }
+
+                net.minecraft.world.level.block.Block block = blockstate.getBlock();
+                if (pPos.y != vec3.y) {
+                    block.updateEntityAfterFallOn(this.level(), this);
+                }
+
+                if (this.onGround()) {
+                    block.stepOn(this.level(), blockpos, blockstate, this);
+                }
+
+                MovementEmission entity$movementemission = this.getMovementEmission();
+                if (entity$movementemission.emitsAnything() && !this.isPassenger()) {
+                    double d1 = vec3.x;
+                    double d2 = vec3.y;
+                    double d3 = vec3.z;
+                    this.flyDist = (float)((double)this.flyDist + vec3.length() * 0.6);
+                    BlockPos blockpos1 = this.getOnPos();
+                    BlockState blockstate1 = this.level().getBlockState(blockpos1);
+                    boolean flag1 = blockstate1.is(BlockTags.CLIMBABLE) || blockstate1.is(Blocks.POWDER_SNOW);
+                    if (!flag1) {
+                        d2 = 0;
+                    }
+
+                    this.walkDist += (float)vec3.horizontalDistance() * 0.6F;
+                    this.moveDist += (float)Math.sqrt(d1 * d1 + d2 * d2 + d3 * d3) * 0.6F;
+                    if (this.moveDist > ((IEntityAccess) this).getNextStep() && !blockstate1.isAir()) {
+                        boolean flag2 = blockpos1.equals(blockpos);
+                        boolean flag3 = ((IEntityAccess) this).invokeVaSEFB(blockpos, blockstate, entity$movementemission.emitsSounds(), flag2, pPos);
+                        if (!flag2) {
+                            flag3 |= ((IEntityAccess) this).invokeVaSEFB(blockpos1, blockstate1, false, entity$movementemission.emitsEvents(), pPos);
+                        }
+
+                        if (flag3) {
+                            ((IEntityAccess) this).setNextStep(nextStep());
+                        } else if (this.isInWater()) {
+                            ((IEntityAccess) this).setNextStep(nextStep());
+                            if (entity$movementemission.emitsSounds()) {
+                                this.waterSwimSound();
+                            }
+
+                            if (entity$movementemission.emitsEvents()) {
+                                this.gameEvent(GameEvent.SWIM);
+                            }
+                        }
+                    } else if (blockstate1.isAir()) {
+                        this.processFlappingMovement();
+                    }
+                }
+
+                this.tryCheckInsideBlocks();
+                float f = this.getBlockSpeedFactor();
+                this.setDeltaMovement(this.getDeltaMovement().multiply(f, 1.0F, f));
+                if (this.level().getBlockStatesIfLoaded(this.getBoundingBox().deflate(1.0E-6)).noneMatch((p_20127_) -> p_20127_.is(BlockTags.FIRE) || p_20127_.is(Blocks.LAVA))) {
+                    if (this.getRemainingFireTicks() <= 0) {
+                        this.setRemainingFireTicks(-this.getFireImmuneTicks());
+                    }
+
+                    if (this.wasOnFire && (this.isInPowderSnow || this.isInWaterRainOrBubble() || this.isInFluidType((fluidType, height) -> this.canFluidExtinguish(fluidType)))) {
+                        this.playEntityOnFireExtinguishedSound();
+                    }
+                }
+
+                if (this.isOnFire() && (this.isInPowderSnow || this.isInWaterRainOrBubble() || this.isInFluidType((fluidType, height) -> this.canFluidExtinguish(fluidType)))) {
+                    this.setRemainingFireTicks(-this.getFireImmuneTicks());
+                }
+
+                level().getProfiler().pop();
+            }
+        }
+    }
+
+    @Unique
+    private Vec3 refuel$vehicleCollide(Vec3 pVec){
+        AABB aabb = this.getBoundingBox();
+        List<VoxelShape> list = this.level().getEntityCollisions(this, aabb.expandTowards(pVec));
+        Vec3 vec3 = pVec.lengthSqr() == 0 ? pVec : collideBoundingBox(this, pVec, aabb, this.level(), list);
+        boolean flag = pVec.x != vec3.x;
+        boolean flag1 = pVec.y != vec3.y;
+        boolean flag2 = pVec.z != vec3.z;
+        boolean flag3 = this.onGround() || flag1 && pVec.y < 0;
+        float stepHeight = this.getStepHeight();
+        if (stepHeight > 0 && flag3 && (flag || flag2)) {
+            Vec3 vec31 = collideBoundingBox(this, new Vec3(pVec.x, stepHeight, pVec.z), aabb, level(), list);
+            Vec3 vec32 = collideBoundingBox(this, new Vec3(0, stepHeight, 0), aabb.expandTowards(pVec.x, 0, pVec.z), level(), list);
+            if (vec32.y < (double)stepHeight) {
+                Vec3 vec33 = collideBoundingBox(this, new Vec3(pVec.x, 0, pVec.z), aabb.move(vec32), this.level(), list).add(vec32);
+                if (vec33.horizontalDistanceSqr() > vec31.horizontalDistanceSqr()) {
+                    vec31 = vec33;
+                }
+            }
+
+            if (vec31.horizontalDistanceSqr() > vec3.horizontalDistanceSqr()) {
+                return vec31.add(collideBoundingBox(this, new Vec3(0.0F, -vec31.y + pVec.y, 0.0F), aabb.move(vec31), this.level(), list));
+            }
+        }
+
+        if(refuel$sinceCollided > 2)
+            refuel$onCollision(refuel$getSpeed());
+        if(horizontalCollision && refuel$getSpeed() / refuel$getMaxSpeed() > 0.8 && vec3.y == 0)
+            refuel$sinceCollided++;
+        else refuel$sinceCollided = 0;
+
+        return vec3;
+    }
+
+    @Unique
+    private int refuel$sinceCollided;
 }

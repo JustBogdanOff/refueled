@@ -35,7 +35,7 @@ public class RefueledCommands {
                                                                 ResourceLocation fluid = commandContext.getArgument("type", ResourceLocation.class);
                                                                 ((IVehicleAccess) vehicle).refuel$setFuelType(fluid.toString());
 
-                                                                commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.fuel.success", vehicle.getDisplayName().getString(), ForgeRegistries.FLUIDS.getValue(fluid).getFluidType().getDescription(), amount), true);
+                                                                commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.fuel.success", vehicle.getDisplayName().getString(), ForgeRegistries.FLUIDS.getValue(fluid).getFluidType().getDescription(), amount), false);
                                                                 return 1;
                                                             }
                                                             else
@@ -55,7 +55,7 @@ public class RefueledCommands {
                                                         float health = commandContext.getArgument("amount", Double.class).floatValue();
                                                         ((IVehicleAccess) vehicle).refuel$setHealth(health);
 
-                                                        commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.health.success", vehicle.getDisplayName().getString(), health), true);
+                                                        commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.health.success", vehicle.getDisplayName().getString(), health), false);
                                                         return 1;
                                                     }
                                                     else
@@ -73,7 +73,7 @@ public class RefueledCommands {
                                                         int energy = commandContext.getArgument("amount", Integer.class);
                                                         ((IVehicleAccess) vehicle).refuel$setBattery(energy);
 
-                                                        commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.energy.success", vehicle.getDisplayName().getString(), energy), true);
+                                                        commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.energy.success", vehicle.getDisplayName().getString(), energy), false);
                                                         return 1;
                                                     }
                                                     else
@@ -93,9 +93,9 @@ public class RefueledCommands {
                                                         ((IVehicleAccess) vehicle).refuel$setTemperature(heat);
 
                                                         if(heat <= -273.15)
-                                                            commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.heat.success.abszero", vehicle.getDisplayName().getString()), true);
+                                                            commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.heat.success.abszero", vehicle.getDisplayName().getString()), false);
                                                         else
-                                                            commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.heat.success", vehicle.getDisplayName().getString(), heat), true);
+                                                            commandContext.getSource().sendSuccess(() -> Component.translatable("message.command.set.heat.success", vehicle.getDisplayName().getString(), heat), false);
                                                         return 1;
                                                     }
                                                     else

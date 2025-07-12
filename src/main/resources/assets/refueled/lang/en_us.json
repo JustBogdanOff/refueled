@@ -33,7 +33,13 @@
 
   "sound.refueled.engine": "Vehicle running",
 
+  "death.attack.refueled.bergentrucked.player.1": "%s didn't know that %s filled up on gas",
+  "death.attack.refueled.bergentrucked.player.2": "%s's fountain making ass got got by %s",
+  "death.attack.refueled.bergentrucked.player.3": "%s got pulverized by %s's Bergentrück",
+  "death.attack.refueled.bergentrucked.player.4": "%s looked like a deer-shaped bump to %s",
+  "death.attack.refueled.crashed": "%s forgot to put the seatbelt on",
+  "death.attack.refueled.crashed.player": "%s had too high hopes in %s's driving",
   "death.attack.refueled.hit_by_vehicle": "%s was ran over by a vehicle",
   "death.attack.refueled.hit_by_vehicle.player": "%s got ran over by %c",
-  "death.attack.refueled.hit_by_vehicle.death": "%s died to an exploding vehicle"
+  "death.attack.refueled.vehicle_explosion": "%s died to an exploding vehicle"
 }

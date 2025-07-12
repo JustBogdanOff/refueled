@@ -1,5 +1,5 @@
 {
   "exhaustion": 0,
-  "message_id": "refueled.hit_by_vehicle.death",
+  "message_id": "refueled.vehicle_explosion",
   "scaling": "when_caused_by_living_non_player"
 }

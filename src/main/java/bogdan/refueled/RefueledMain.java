@@ -33,8 +33,9 @@ public class RefueledMain {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public RefueledMain() {
-        ServerConfig.register(ModLoadingContext.get());
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+
+        ServerConfig.register(ModLoadingContext.get());
 
         RefueledRegistry.init(modEventBus);
         modEventBus.addListener(this::commonSetup);
