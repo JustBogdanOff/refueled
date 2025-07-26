@@ -3,9 +3,12 @@ package bogdan.refueled.config;
 import bogdan.refueled.RefueledMain;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
 import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
@@ -38,9 +41,13 @@ public class ServerConfig {
     public static BooleanValue useBattery;
     public static BooleanValue damageEntities;
     public static BooleanValue collideWithEntities;
+    public static BooleanValue correctYaw;
+    public static BooleanValue restrictYaw;
 
     public static IntValue canisterMax;
     public static IntValue batteryMax;
+    public static IntValue gasStationMax;
+    public static IntValue gasStationTransferMax;
 
     public static DoubleValue offroadSpeed;
 
@@ -171,7 +178,7 @@ public class ServerConfig {
 
         offroadSpeed = builder
                 .comment("Speed modifier for DragN's vehicles on non-road blocks")
-                .defineInRange("offroad_speed", 1d, 0.001d, 10d);
+                .defineInRange("offroad_speed", 1d, 0.001, 10d);
 
         explodeOnDeath = builder
                 .comment("Whether the vehicle should cause an explosion on death")
@@ -179,11 +186,11 @@ public class ServerConfig {
 
         canisterMax = builder
                 .comment("How much can the canister hold of a fluid, in [mB]")
-                .defineInRange("canister_max", 2000, 400, 16000);
+                .defineInRange("canister_max", 2000, 444, Integer.MAX_VALUE);
 
         batteryMax = builder
                 .comment("How much the battery can hold FE")
-                .defineInRange("battery_max", 6000, 400, 16000);
+                .defineInRange("battery_max", 8100, 444, Integer.MAX_VALUE);
 
         vehiclePersist = builder
                 .comment("Whether vehicles should persist in-game when it's only passenger disconnects")
@@ -195,7 +202,7 @@ public class ServerConfig {
 
         repairItems = builder
                 .comment("What items should be considered vehicle-repairable, along with how much of said item is required to repair, and how much HP should it repair", "Any starting with '#' are considered an item tag")
-                .defineList("repair_items", List.of(List.of("minecraft:iron_ingot", "4", "4.5"), List.of("#forge:ingots/steel", "1", "6")), ServerConfig::validateRepairItem);
+                .defineList("repair_items", List.of(List.of("minecraft:iron_ingot", "4", "9"), List.of("#forge:ingots/steel", "1", "6")), ServerConfig::validateRepairItem);
 
         fuelEff = builder
                 .comment("Fluids defined as acceptable fuels for vehicles, along with their efficiency")
@@ -204,6 +211,22 @@ public class ServerConfig {
         solidEntities = builder
                 .comment("Running over entity blacklist", "Having collide_with_entities enabled makes this a whitelist instead")
                 .defineList("solid_entities", List.of("minecraft:ender_dragon"), ServerConfig::validateEntity);
+
+        gasStationMax = builder
+                .comment("How much fuel can the gas station block hold")
+                .defineInRange("gas_station_capacity", 20000, 444, Integer.MAX_VALUE);
+
+        gasStationTransferMax = builder
+                .comment("Defines how fast the gas station can transfer fuel in [mB/t]")
+                .defineInRange("gas_station_transfer", 100, 1, Integer.MAX_VALUE);
+
+        correctYaw = builder.
+                comment("Whether players inside the vehicles should have their head rotated along with the vehicle")
+                .define("correct_yaw", true);
+
+        restrictYaw = builder.
+                comment("Whether players should be able to turn their head the whole 360 degrees when in a vehicle")
+                .define("restrict_yaw", true);
 
         builder.push("road_blocks");
             roadBlocks = builder
@@ -372,6 +395,9 @@ public class ServerConfig {
     }
 
     public static float getFuelEfficiency(Fluid fluid){
+        if(fluid == Fluids.EMPTY)
+            return 0;
+
         if (fluid != null) {
             for(List<String> fuelValue : ServerConfig.fuelEff.get()){
                 if (fluid == ForgeRegistries.FLUIDS.getValue(new ResourceLocation(fuelValue.get(0)))) {

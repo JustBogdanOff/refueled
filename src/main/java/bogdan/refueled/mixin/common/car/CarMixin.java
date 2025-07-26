@@ -1,5 +1,6 @@
 package bogdan.refueled.mixin.common.car;
 
+import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.gui.TruckGUI;
 import bogdan.refueled.common.network.*;
@@ -9,6 +10,8 @@ import bogdan.refueled.config.ServerConfig;
 import bogdan.refueled.mixin.common.accessor.IBiomeAccess;
 import bogdan.refueled.mixin.common.accessor.IEntityAccess;
 import bogdan.refueled.mixin.common.accessor.IHeightAccess;
+import bogdan.refueled.mixin.common.accessor.ILevelAccess;
+import com.dragn0007.dragnvehicles.registry.ItemRegistry;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
 import com.dragn0007.dragnvehicles.vehicle.classic.Classic;
 import com.dragn0007.dragnvehicles.vehicle.motorcycle.Motorcycle;
@@ -22,6 +25,7 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -40,6 +44,7 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.DismountHelper;
+import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
@@ -47,6 +52,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -63,7 +69,6 @@ import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
@@ -97,14 +102,14 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
      * todo:
      *     - !!! Add a gas station block and tile entity
      *     - !! Add paint markings and item
-     *     - !! add a way to pickup the vehicles
+     *     - ! add lighting to vehicles
      *     - ! make the recipes conditional
-     *     - ! add a way to transfer energy from car to another container
+     *     - ! add a crafting recipe allowing for energy/fluid transfer using the battery/canister
+     *     - Add 2 collision PartEntity hitboxes to front and back of the vehicles
+     *     - update the sloping system block collection
      *     - Implement a way to keep the vehicles locked
      *     - model custom slot and 2 states, one with key and other without
      *     - render the cars glovebox locked (disabled slots)
-     *     - Add 2 collision PartEntity hitboxes to front and back of the vehicles
-     *     - update the sloping system block collection
      **/
 
     @Unique
@@ -237,8 +242,24 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             at = @At("HEAD"),
             cancellable = true
     )
-    private void refuel$injectSiphon(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
+    private void refuel$injectMoreInteraction(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         ItemStack item = player.getItemInHand(hand);
+        if (isCar(item.getItem()) || item.getItem() instanceof BucketItem) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        if(player.isShiftKeyDown() && (item.getItem() == Items.SHEARS || item.getTags().anyMatch(tag -> tag.location().toString().equals("forge:tools/wrench")))){
+            refuel$convertIntoItems();
+            ItemStack egg = refuel$getEgg();
+            if(player.getInventory().add(egg))
+                player.drop(egg, true);
+
+            this.remove(RemovalReason.DISCARDED);
+            cir.setReturnValue(InteractionResult.sidedSuccess(level().isClientSide));
+            return;
+        }
+
         if(item.getItem() == Items.NAME_TAG){
             this.setCustomName(item.getHoverName());
             item.shrink(1);
@@ -246,14 +267,9 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             return;
         }
 
-        if (isCar(item.getItem()) || item.getItem() instanceof BucketItem) {
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
-
         if (player.isShiftKeyDown() && item.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) {
-            IFluidHandlerItem otherHandler = item.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
-            IFluidHandler handler = this.getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
+            IFluidHandler otherHandler = item.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get(),
+                    handler = getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
             FluidStack fluidStack = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
                     otherFluidStack = otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
 
@@ -354,11 +370,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         tag.putInt("energy", entityData.get(refuel$BATTERY_LEVEL));
         saveInventory(tag, "internalInventory", refuel$internalInventory);
         tag.put("Fluid", new FluidStack(refuel$getFluid(), refuel$getFuel()).writeToNBT(new CompoundTag()));
-
-        tag.remove("fluid_inventory");
-        tag.remove("engine_temp");
-        tag.remove("battery_level");
-        tag.remove("int_inventory");
     }
 
     @Inject(
@@ -375,10 +386,10 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         if(tag.contains("Fluid")){
             var temp = FluidStack.loadFluidStackFromNBT(tag.getCompound("Fluid"));
-            var fluidKey = ForgeRegistries.FLUIDS.getKey(temp.getFluid());
-            if(temp != FluidStack.EMPTY && fluidKey != null){
+            var efficiency = ServerConfig.getFuelEfficiency(temp.getFluid());
+            if(efficiency > 0){
                 entityData.set(refuel$FUEL_AMOUNT, temp.getAmount());
-                entityData.set(refuel$FUEL_TYPE, fluidKey.toString());
+                entityData.set(refuel$FUEL_TYPE, tag.getCompound("Fluid").getString("FluidName"));
             }
         }
     }
@@ -453,6 +464,10 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
     @Shadow(remap = false)
     @Final
     private static EntityDataAccessor<Float> HEALTH;
+
+    @Shadow(remap = false)
+    @Final
+    private static float GRAVITY;
 
     public float refuel$getSpeed() {
         return entityData.get(refuel$SPEED);
@@ -685,7 +700,8 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     private Player refuel$getDriver(){
-        return (Player) getFirstPassenger();
+        Entity firstPassenger = getFirstPassenger();
+        return firstPassenger instanceof Player ? (Player) firstPassenger : null;
     }
 
     @Unique
@@ -704,13 +720,14 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             refuel$setLeft(false);
             refuel$setRight(false);
         }
-        var nausea = refuel$getDriver() == null || !refuel$canPlayerDriveCar(refuel$getDriver()) ? null : refuel$getDriver().getEffect(MobEffects.CONFUSION);
+        Player driver = refuel$getDriver();
+        var nausea = driver == null || !refuel$canPlayerDriveCar(driver) ? null : driver.getEffect(MobEffects.CONFUSION);
         int amp = -1;
         if (nausea != null) {
             amp = nausea.getAmplifier();
             if (tickCount % (random.nextInt(amp) + 1) == 0) refuel$randomInputs = new boolean[]{
-                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isLeft(),
-                    random.nextInt(10 + Mth.floor(refuel$getDriver().getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(refuel$getDriver().getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isRight()
+                    random.nextInt(10 + Mth.floor(driver.getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(driver.getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isLeft(),
+                    random.nextInt(10 + Mth.floor(driver.getMaxHealth() / 10) - Math.min(amp, 9 + Mth.floor(driver.getMaxHealth() / 10))) == 0 ? random.nextBoolean() : refuel$isRight()
             };
         } else refuel$drunkTicks = new int[4];
 
@@ -818,15 +835,15 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         refuel$updateGravity();
         refuel$handleInput();
-        if (level().isClientSide) refuel$updateWheelRotation();
 
         if (isInLava() && tickCount % 2 == 0) refuel$addDamage(1);
-        if (refuel$isStarted() || getHP(this) < 1f) refuel$particles();
+        if (refuel$isStarted() || getHP(this) <= 1) refuel$particles();
 
         refuel$fuelTick();
         refuel$checkSlots();
 
         if (level().isClientSide) {
+            refuel$updateWheelRotation();
             refuel$displaySpeed(refuel$getSpeed());
             refuel$updateSounds();
             if (refuel$isStarted()) {
@@ -918,7 +935,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             RefueledChannel.sendToServer(new VehicleCrash(this, speed));
         }
         refuel$setSpeed(0);
-        setDeltaMovement(0, 0, 0);
+        setDeltaMovement(0, getDeltaMovement().y, 0);
 
         float percSpeed = speed / refuel$getMaxSpeed(),
                 totalDamage;
@@ -1138,11 +1155,44 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         refuel$tasks.add(() -> {
             var fuelPerc = (float) refuel$getFuel() / (float) refuel$getMaxFuel();
             if (ServerConfig.explodeOnDeath.get())
-                level().explode(null, new DamageSource(level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(RefueledRegistry.vehicleExplosion), this, refuel$getDriver(), position()), null, getX(), getY(), getZ(), 2f + 4f * fuelPerc, fuelPerc >= 0.75, Level.ExplosionInteraction.MOB);
+                level().explode(null, new DamageSource(level().registryAccess().registry(Registries.DAMAGE_TYPE).get().getHolderOrThrow(RefueledRegistry.vehicleExplosion), this, refuel$getDriver(), position()), null, getX(), getY(), getZ(), 2f + 4f * fuelPerc, fuelPerc >= 0.75, Level.ExplosionInteraction.MOB);
             Containers.dropContents(this.level(), this, inventory);
             Containers.dropContents(this.level(), this, refuel$internalInventory);
+            refuel$convertIntoItems();
             this.kill();
         });
+    }
+
+    @Unique
+    private void refuel$convertIntoItems(){
+        Containers.dropContents(this.level(), this, inventory);
+        Containers.dropContents(this.level(), this, refuel$internalInventory);
+    }
+
+    @Unique
+    private ItemStack refuel$getEgg(){
+        ItemStack egg = List.of(ItemRegistry.CAR_SPAWN_EGG, ItemRegistry.CLASSIC_SPAWN_EGG, ItemRegistry.TRUCK_SPAWN_EGG, ItemRegistry.SUV_SPAWN_EGG, ItemRegistry.SPORT_CAR_SPAWN_EGG, ItemRegistry.MOTORCYCLE_SPAWN_EGG).get(refuel$type).get().getDefaultInstance();
+        CompoundTag tag = new CompoundTag();
+        tag.putFloat("temperature", refuel$getTemperature());
+
+        if(refuel$getBattery() > 0)
+            tag.putInt("energy", refuel$getBattery());
+
+        if(refuel$getFuel() > 0){
+            tag.put("Fluid", new FluidStack(refuel$getFluid(), refuel$getFuel()).writeToNBT(new CompoundTag()));
+        }
+
+        if(refuel$getHealth() > 0)
+            tag.putFloat("Health", refuel$getHealth());
+
+        if(hasCustomName()){
+            //noinspection DataFlowIssue
+            tag.putString("custom", getCustomName().getString());
+            egg.setHoverName(Component.literal(getCustomName().getString()));
+        }
+
+        egg.getOrCreateTag().put("refueled", tag);
+        return egg;
     }
 
     @Unique
@@ -1172,9 +1222,9 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         if (!level().isClientSide && ServerConfig.damageEntities.get() && entity instanceof LivingEntity mob && !getPassengers().contains(entity)) {
             if (entity.getBoundingBox().intersects(getBoundingBox()) && refuel$getSpeed() > 0.3) {
                 double damage = refuel$getSpeed() * refuel$getRamDamage();
-                DamageSource source = new DamageSource(level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(RefueledRegistry.vehicleCollision), this, refuel$getDriver());
+                DamageSource source = new DamageSource(level().registryAccess().registry(Registries.DAMAGE_TYPE).get().getHolderOrThrow(RefueledRegistry.vehicleCollision), this, refuel$getDriver());
                 //noinspection ConstantValue,EqualsBetweenInconvertibleTypes
-                if(CarMixin.class.equals(Truck.class) && this.getCustomName().getString().equalsIgnoreCase("bergentrück") && refuel$getDriver() != null && refuel$getDriver().getItemInHand(InteractionHand.MAIN_HAND).getItem() == Items.TRIDENT){
+                if(CarMixin.class.equals(Truck.class) && this.hasCustomName() && this.getCustomName().getString().equalsIgnoreCase("bergentrück") && refuel$getDriver() != null && refuel$getDriver().getItemInHand(InteractionHand.MAIN_HAND).getItem() == Items.TRIDENT){
                     damage *= 3.4;
                     source = new DamageSource(level().registryAccess().registry(Registries.DAMAGE_TYPE).get().getHolderOrThrow(RefueledRegistry.bergentrucked), this, refuel$getDriver());
                 }
@@ -1210,18 +1260,17 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     private void refuel$updateGravity() {
+        Vec3 delta = getDeltaMovement();
         if (isNoGravity()) {
-            setDeltaMovement(getDeltaMovement().x, 0D, getDeltaMovement().z);
+            setDeltaMovement(delta.x, 0, delta.z);
             return;
         }
-        setDeltaMovement(getDeltaMovement().x, getDeltaMovement().y - 0.2D, getDeltaMovement().z);
+        setDeltaMovement(delta.x, delta.y - (isInWater() ? 0.01 : 0.08), delta.z);
     }
 
     @Unique
     public void refuel$spawnParticles(boolean driving) {
-        if (!level().isClientSide) {
-            return;
-        }
+        if (!level().isClientSide) return;
         Vec3 lookVec = getLookAngle().normalize();
         double lookAngle = getYRot() < 0 ? 360 + getYRot() : getYRot();
 
@@ -1287,14 +1336,11 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         if (!level().isClientSide) {
             return;
         }
-        int health = (int) (refuel$getHealth() / refuel$getMaxHealth() * 100f);
+        int health = (int) ((refuel$getHealth() / refuel$getMaxHealth()) * 100);
 
-        if (health > 50) {
-            return; // Don't render damage particles if car is above 50% health
-        }
+        if (health > 50) return;
 
-        int amount;
-
+        int amount = 3;
         if (health > 30) {
             if (random.nextInt(10) != 0) {
                 return; // If between 50% and 30%, render a particle 10% of the time
@@ -1307,8 +1353,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             amount = 1;
         } else if (health > 10) {
             amount = 2; // If between 20% and 10%, render 2 particles every tick
-        } else {
-            amount = 3; // If below 10%, render 3 particles every tick
         }
 
         for (int i = 0; i < amount; i++) {
@@ -1395,38 +1439,11 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Override
     public AbstractContainerMenu createMenu(int i, @NotNull Inventory playerInventory, @NotNull Player playerEntity) {
-        return new CarGUI(i, this, playerInventory);
-    }
-
-    @Mixin(Car.class)
-    private abstract static class ModernMixin implements IVehicleAccess {
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 20f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(0).floatValue();
-        }
-
-        public float refuel$getMaxHealth(){
-            return ServerConfig.vehicleHealth.get().get(0).floatValue();
-        }
+        return new CarGUI(i, playerInventory, this);
     }
 
     @Mixin(Classic.class)
     private abstract static class ClassicMixin implements IVehicleAccess {
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 20f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(1).floatValue();
-        }
-
-        public float refuel$getMaxHealth(){
-            return ServerConfig.vehicleHealth.get().get(1).floatValue();
-        }
-
         @Override
         public Vec3[] refuel$getSeatPositions() {
             return new Vec3[]{
@@ -1484,17 +1501,9 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
                 @Override
                 public @NotNull AbstractContainerMenu createMenu(int i, @NotNull Inventory playerInventory, @NotNull Player playerEntity) {
-                    return new TruckGUI(i, TruckMixin.this, playerInventory);
+                    return new TruckGUI(i, playerInventory, (Truck) ((Entity) TruckMixin.this));
                 }
             }, packetBuffer -> packetBuffer.writeUUID(getUUID()));
-        }
-
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 25f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(2).floatValue();
         }
 
         public float refuel$getPitch() {
@@ -1503,22 +1512,11 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.TRUCK_ENGINE.get();
-        }
-
-        public float refuel$getMaxHealth() {
-            return ServerConfig.vehicleHealth.get().get(2).floatValue();
         }
     }
 
     @Mixin(SUV.class)
     private abstract static class SUVMixin implements IVehicleAccess {
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 25f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(3).floatValue();
-        }
 
         public float refuel$getPitch() {
             return 1f + 0.34f * Math.abs(refuel$getSpeed()) / refuel$getMaxSpeed();
@@ -1527,21 +1525,10 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         public SoundEvent refuel$getEngineSound() {
             return RefueledRegistry.TRUCK_ENGINE.get();
         }
-
-        public float refuel$getMaxHealth() {
-            return ServerConfig.vehicleHealth.get().get(3).floatValue();
-        }
     }
 
     @Mixin(SportCar.class)
     private abstract static class SportMixin implements IVehicleAccess {
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 20f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(4).floatValue();
-        }
 
         public Vec3[] refuel$getSeatPositions() {
             return new Vec3[]{
@@ -1550,10 +1537,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
                     new Vec3(0.7 * sizeFactor, 0, -2.2 * sizeFactor),
                     new Vec3(-0.7 * sizeFactor, 0, -2.2 * sizeFactor)
             };
-        }
-
-        public float refuel$getMaxHealth() {
-            return ServerConfig.vehicleHealth.get().get(4).floatValue();
         }
 
         public float[] refuel$getExhaust(int rand) {
@@ -1573,14 +1556,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Mixin(Motorcycle.class)
     private abstract static class BikeMixin implements IVehicleAccess {
-        @ModifyConstant(
-                method = "defineSynchedData",
-                constant = @Constant(floatValue = 20f)
-        )
-        private float refuel$increaseHealth(float original) {
-            return ServerConfig.vehicleHealth.get().get(5).floatValue();
-        }
-
         @Override
         public float[] refuel$getExhaust(int rand) {
             // todo sizeFactor
@@ -1599,10 +1574,6 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
             return new Vec3[]{
                     new Vec3(0, 0.56 * sizeFactor, -0.5 * sizeFactor)
             };
-        }
-
-        public float refuel$getMaxHealth() {
-            return ServerConfig.vehicleHealth.get().get(5).floatValue();
         }
 
         public SoundEvent refuel$getEngineSound() {
@@ -1655,6 +1626,10 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
         }
     }
 
+    public float refuel$getMaxHealth() {
+        return ServerConfig.vehicleHealth.get().get(refuel$type).floatValue();
+    }
+
     public int refuel$getMaxBattery(){
         return ServerConfig.vehicleBattery.get().get(refuel$type).intValue();
     }
@@ -1678,7 +1653,12 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public float refuel$getEfficiency(Fluid fluid){
-        return ServerConfig.vehicleFuelEff.get().get(refuel$type).floatValue() * ServerConfig.getFuelEfficiency(fluid);
+        var eff = ServerConfig.getFuelEfficiency(fluid);
+        if(eff <= 0){
+            eff = 0;
+            refuel$setFuel(0);
+        }
+        return ServerConfig.vehicleFuelEff.get().get(refuel$type).floatValue() * eff;
     }
 
     @Unique
@@ -1725,11 +1705,13 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     private void refuel$drainFuel(int amount){
-        if(!refuel$internalInventory.getItem(0).isEmpty() && refuel$internalInventory.getItem(0).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get().drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE).getAmount() > 0){
+        if(!refuel$internalInventory.getItem(0).isEmpty()){
             refuel$internalInventory.getItem(0).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent( otherHandler -> {
-                int remainder = amount - otherHandler.drain(amount, IFluidHandler.FluidAction.EXECUTE).getAmount();
-                if(remainder > 0)
-                    refuel$setFuel(refuel$getFuel() - remainder);
+                if(otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE).getAmount() > 0){
+                    int remainder = amount - otherHandler.drain(amount, IFluidHandler.FluidAction.EXECUTE).getAmount();
+                    if(remainder > 0)
+                        refuel$setFuel(refuel$getFuel() - remainder);
+                }
             });
         }
         else
@@ -1738,6 +1720,16 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     private void refuel$checkSlots(){
+        if(!refuel$internalInventory.getItem(0).isEmpty()){
+            refuel$internalInventory.getItem(0).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
+                    otherHandler -> {
+                if(otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE).getAmount() > 0){
+                    int toDrain = Math.min(refuel$getMaxFuel() - refuel$getFuel(), 0);
+                    refuel$setFuel(otherHandler.drain(toDrain, IFluidHandler.FluidAction.EXECUTE).getAmount());
+                }
+            });
+        }
+
         if(!refuel$internalInventory.getItem(1).isEmpty()){
             ItemStack stack = refuel$internalInventory.getItem(1);
 

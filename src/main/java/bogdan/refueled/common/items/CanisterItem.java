@@ -12,7 +12,6 @@ import net.minecraft.world.item.*;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.LiquidBlock;
-import net.minecraft.world.level.block.LiquidBlockContainer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -31,8 +30,8 @@ import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class Canister extends Item {
-    public Canister() {
+public class CanisterItem extends Item {
+    public CanisterItem() {
         super(new Properties().stacksTo(16));
     }
 
@@ -44,10 +43,30 @@ public class Canister extends Item {
             ItemStack copy = ctx.getItemInHand().copyWithCount(1);
             LazyOptional<IFluidHandlerItem> lazyHandler = copy.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM);
             if(lazyHandler.isPresent()){
+
                 IFluidHandlerItem handler = lazyHandler.resolve().get();
                 FluidStack stored = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
                 BlockPos fluidPos = ctx.getClickedPos();
                 var state = ctx.getLevel().getBlockState(fluidPos);
+
+                BlockEntity be = ctx.getLevel().getBlockEntity(ctx.getClickedPos());
+                if(be != null && be.getCapability(ForgeCapabilities.FLUID_HANDLER, ctx.getClickedFace()).isPresent()){
+                    IFluidHandler blockHandler = be.getCapability(ForgeCapabilities.FLUID_HANDLER, ctx.getClickedFace()).resolve().get();
+                    var success = handle(handler, blockHandler);
+                    if (success){
+                        if(!ctx.getLevel().isClientSide) {
+                            ctx.getLevel().playSound(null, ctx.getClickedPos(), SoundEvents.BREWING_STAND_BREW, SoundSource.BLOCKS, 0.15f, 1f);
+                        }
+                        if(ctx.getItemInHand().getCount() > 1) {
+                            ctx.getItemInHand().shrink(1);
+                            if (!ctx.getPlayer().getInventory().add(copy))
+                                ctx.getPlayer().drop(copy, true);
+                        }
+                        else ctx.getPlayer().setItemInHand(ctx.getHand(), copy);
+                        return InteractionResult.sidedSuccess(ctx.getLevel().isClientSide);
+                    }
+                }
+
                 // See if block is water-loggable
                 if(!state.getProperties().contains(BlockStateProperties.WATERLOGGED)) {
                     fluidPos = new BlockPos(ctx.getClickedFace().getNormal().offset(fluidPos));
@@ -83,46 +102,33 @@ public class Canister extends Item {
                 }
             }
         }
-        else{
-            BlockEntity be = ctx.getLevel().getBlockEntity(ctx.getClickedPos());
-            if (be == null) return super.useOn(ctx);
-
-            if(be.getCapability(ForgeCapabilities.FLUID_HANDLER, ctx.getClickedFace()).isPresent()){
-                boolean success = handle(ctx.getItemInHand(), be.getCapability(ForgeCapabilities.FLUID_HANDLER, ctx.getClickedFace()).resolve().get());
-                if (success && !ctx.getLevel().isClientSide)
-                    ctx.getLevel().playSound(null, ctx.getClickedPos(), SoundEvents.BREWING_STAND_BREW, SoundSource.BLOCKS, 0.15f, 1f);
-                return InteractionResult.sidedSuccess(ctx.getLevel().isClientSide);
-            }
-        }
 
         return InteractionResult.FAIL;
     }
 
-    public boolean handle(ItemStack stack, IFluidHandler otherHandler){
-        LazyOptional<IFluidHandlerItem> lazyHandler = stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM);
-        if(lazyHandler.isPresent()){
-            IFluidHandlerItem handler = lazyHandler.resolve().get();
-            FluidStack stored = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
-                    otherStored = otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
-            if(!otherStored.isEmpty()){
-                // and if there's any space left in our handler
-                if(handler.fill(new FluidStack(stored, Integer.MAX_VALUE), IFluidHandler.FluidAction.SIMULATE) > 0){
-                    otherHandler.drain(handler.fill(otherStored, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
-                    return true;
-                }
-                // otherwise assume it's full and drain
-                else{
-                    handler.drain(otherHandler.fill(stored, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
-                    return true;
-                }
+    public boolean handle(IFluidHandlerItem handler, IFluidHandler otherHandler){
+        FluidStack stored = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
+                otherStored = otherHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
+        if (!otherStored.isEmpty()) {
+            // if we can accept their fluid
+            if (handler.fill(otherStored, IFluidHandler.FluidAction.SIMULATE) > 0 && otherHandler.drain(handler.fill(otherStored, IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.SIMULATE).getAmount() > 0) {
+                var ourFilled = handler.fill(otherStored, IFluidHandler.FluidAction.EXECUTE);
+                otherHandler.drain(ourFilled, IFluidHandler.FluidAction.EXECUTE);
+                return true;
             }
-            // If the otherHandler is empty and our handler contains anything
-            else if(!stored.isEmpty()){
-                handler.drain(otherHandler.fill(stored, IFluidHandler.FluidAction.EXECUTE), IFluidHandler.FluidAction.EXECUTE);
+            // otherwise assume it's full and drain
+            else if (otherHandler.fill(stored, IFluidHandler.FluidAction.SIMULATE) > 0 && handler.drain(otherHandler.fill(stored, IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.SIMULATE).getAmount() > 0) {
+                var otherFilled = otherHandler.fill(stored, IFluidHandler.FluidAction.EXECUTE);
+                handler.drain(otherFilled, IFluidHandler.FluidAction.EXECUTE);
                 return true;
             }
         }
-
+        // If the otherHandler is empty and our handler contains anything
+        else if (!stored.isEmpty() && otherHandler.fill(stored, IFluidHandler.FluidAction.SIMULATE) > 0 && handler.drain(otherHandler.fill(stored, IFluidHandler.FluidAction.SIMULATE), IFluidHandler.FluidAction.SIMULATE).getAmount() > 0) {
+            var otherFilled = otherHandler.fill(stored, IFluidHandler.FluidAction.EXECUTE);
+            handler.drain(otherFilled, IFluidHandler.FluidAction.EXECUTE);
+            return true;
+        }
         return false;
     }
 
@@ -141,10 +147,15 @@ public class Canister extends Item {
 
     @Override
     public void appendHoverText(@NotNull ItemStack stack, @Nullable Level worldIn, @NotNull List<Component> tooltip, @NotNull TooltipFlag flagIn) {
-        if(ForgeCapabilities.FLUID_HANDLER_ITEM != null) {
-            FluidUtil.getFluidContained(stack).ifPresentOrElse(
-                    fs -> addInfo(fs.getDisplayName().getString(), fs.getAmount(), tooltip),
-                    () -> addInfo("-", 0, tooltip)
+        if(ForgeCapabilities.FLUID_HANDLER_ITEM.isRegistered()) {
+            stack.copyWithCount(1).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
+                    handler -> {
+                        var fs = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
+                        if(fs.isEmpty())
+                            addInfo("-", 0, tooltip);
+                        else
+                            addInfo(fs.getDisplayName().getString(), fs.getAmount(), tooltip);
+                    }
             );
             return;
         }
@@ -157,10 +168,5 @@ public class Canister extends Item {
     public @NotNull ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
         if(!stack.isEmpty()) return new FluidHandlerItemStack(stack, getCapacity());
         return null;
-    }
-
-    private boolean canBlockContainFluid(Level level, BlockPos pos, Fluid fluid) {
-        var state = level.getBlockState(pos);
-        return state.getBlock() instanceof LiquidBlockContainer liquidBlock && liquidBlock.canPlaceLiquid(level, pos, state, fluid);
     }
 }

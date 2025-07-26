@@ -23,8 +23,8 @@ import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class Battery extends Item {
-    public Battery() {
+public class BatteryItem extends Item {
+    public BatteryItem() {
         super(new Item.Properties().stacksTo(1));
     }
 
@@ -59,8 +59,8 @@ public class Battery extends Item {
         if(context.getItemInHand().getCapability(ForgeCapabilities.ENERGY).isPresent() && (state.getBlock() == Blocks.REDSTONE_ORE || state.getBlock() == Blocks.DEEPSLATE_REDSTONE_ORE)){
             IEnergyStorage energy = context.getItemInHand().getCapability(ForgeCapabilities.ENERGY).resolve().get();
 
-            if(energy.getMaxEnergyStored() - energy.getEnergyStored() > 3600){
-                energy.receiveEnergy(3600, false);
+            if(energy.getMaxEnergyStored() - energy.getEnergyStored() > 8100){
+                energy.receiveEnergy(8100, false);
                 if(!context.getLevel().isClientSide){
                     context.getLevel().playSound(null, context.getClickedPos(), SoundEvents.AXE_WAX_OFF, SoundSource.BLOCKS, 1f, 0.15f);
                     if(state.getBlock() == Blocks.REDSTONE_ORE)

@@ -1,9 +1,13 @@
 package bogdan.refueled;
 
+import bogdan.refueled.client.GasStationBlockEntityRenderer;
 import bogdan.refueled.client.gui.CarGUIScreen;
 import bogdan.refueled.client.events.KeyEvent;
 import bogdan.refueled.client.events.RenderEvent;
+import bogdan.refueled.client.gui.GasStationGUIScreen;
 import bogdan.refueled.client.gui.TruckGUIScreen;
+import bogdan.refueled.common.blocks.blockentities.GasStationBlockEntity;
+import bogdan.refueled.common.gui.GasStationGUI;
 import bogdan.refueled.server.PlayerEvents;
 import bogdan.refueled.common.network.RefueledChannel;
 import bogdan.refueled.config.ClientConfig;
@@ -12,6 +16,8 @@ import bogdan.refueled.server.RefueledCommands;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
@@ -58,9 +64,12 @@ public class RefueledMain {
         MinecraftForge.EVENT_BUS.register(new KeyEvent());
         MinecraftForge.EVENT_BUS.register(new RenderEvent());
 
+
         event.enqueueWork(() -> {
             MenuScreens.register(RefueledRegistry.CAR_GUI.get(), CarGUIScreen::new);
             MenuScreens.register(RefueledRegistry.TRUCK_GUI.get(), TruckGUIScreen::new);
+            MenuScreens.register(RefueledRegistry.GAS_STATION_GUI.get(), GasStationGUIScreen::new);
+            BlockEntityRenderers.register(RefueledRegistry.GAS_STATION_BLOCK_ENTITY.get(), GasStationBlockEntityRenderer::new);
         });
     }
 

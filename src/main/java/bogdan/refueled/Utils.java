@@ -1,6 +1,7 @@
 package bogdan.refueled;
 
 import bogdan.refueled.common.accessors.IVehicleAccess;
+import bogdan.refueled.common.blocks.blockentities.GasStationBlockEntity;
 import com.dragn0007.dragnvehicles.item.*;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
 import com.dragn0007.dragnvehicles.vehicle.classic.Classic;
@@ -10,6 +11,7 @@ import com.dragn0007.dragnvehicles.vehicle.suv.SUV;
 import com.dragn0007.dragnvehicles.vehicle.truck.Truck;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.util.Mth;
@@ -17,6 +19,10 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+
+import java.util.List;
 
 public abstract class Utils {
     public static float mod(float n, float m) {
@@ -102,5 +108,17 @@ public abstract class Utils {
 
     public static int getHP(Entity car){
         return Mth.floor((((IVehicleAccess) car).refuel$getHealth() / ((IVehicleAccess) car).refuel$getMaxHealth()) * 100);
+    }
+
+    public static int[] getGasStationEntities(Level level, BlockPos pos){
+        List<Entity> entities = level.getEntities(null, GasStationBlockEntity.getFuelingBox(pos, level.getBlockState(pos)));
+        int[] array = new int[4];
+        for(int i = 0; i < 4; i++){
+            if(entities.size() - 1 >= i && entities.get(i).getCapability(ForgeCapabilities.FLUID_HANDLER).isPresent())
+                array[i] = entities.get(i).getId();
+            else array[i] = -1;
+        }
+
+        return array;
     }
 }

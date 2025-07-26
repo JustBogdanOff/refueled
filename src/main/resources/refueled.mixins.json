@@ -15,7 +15,6 @@
     "common.car.CarMixin",
     "common.car.CarMixin$BikeMixin",
     "common.car.CarMixin$ClassicMixin",
-    "common.car.CarMixin$ModernMixin",
     "common.car.CarMixin$SportMixin",
     "common.car.CarMixin$SUVMixin",
     "common.car.CarMixin$TruckMixin",

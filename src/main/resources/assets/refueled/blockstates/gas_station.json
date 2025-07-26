@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "facing=north,gas_station_bottom=true": {
+      "model": "refueled:block/gas_station_bottom"
+    },
+    "facing=north,gas_station_bottom=false": {
+      "model": "refueled:block/gas_station_top"
+    },
+    "facing=east,gas_station_bottom=true": {
+      "model": "refueled:block/gas_station_bottom",
+      "y": 90
+    },
+    "facing=east,gas_station_bottom=false": {
+      "model": "refueled:block/gas_station_top",
+      "y": 90
+    },
+    "facing=south,gas_station_bottom=true": {
+      "model": "refueled:block/gas_station_bottom",
+      "y": 180
+    },
+    "facing=south,gas_station_bottom=false": {
+      "model": "refueled:block/gas_station_top",
+      "y": 180
+    },
+    "facing=west,gas_station_bottom=true": {
+      "model": "refueled:block/gas_station_bottom",
+      "y": 270
+    },
+    "facing=west,gas_station_bottom=false": {
+      "model": "refueled:block/gas_station_top",
+      "y": 270
+    }
+  }
+}

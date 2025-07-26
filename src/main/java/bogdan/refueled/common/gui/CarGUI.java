@@ -3,7 +3,11 @@ package bogdan.refueled.common.gui;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.config.ServerConfig;
+import bogdan.refueled.mixin.common.accessor.ILevelAccess;
+import com.dragn0007.dragnvehicles.vehicle.truck.Truck;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -20,11 +24,15 @@ public class CarGUI extends AbstractContainerMenu {
     private final Container inventory, playerInventory;
     public final Entity car;
 
-    public CarGUI(int id, Entity car, Inventory playerInventory) {
+    public CarGUI(int id, Inventory playerInventory, FriendlyByteBuf extraData){
+        this(id, playerInventory, ((ILevelAccess) playerInventory.player.level()).invokeGetEntities().get(extraData.readUUID()));
+    }
+
+    public CarGUI(int id, Inventory playerInventory, Entity car) {
         super(RefueledRegistry.CAR_GUI.get(), id);
 
         this.car = car;
-        this.inventory = ((IVehicleAccess) car).refuel$getContainer();
+        this.inventory = car == null ? new SimpleContainer(0) : ((IVehicleAccess) car).refuel$getContainer();
         this.playerInventory = playerInventory;
         int numRows = inventory.getContainerSize() / 8;
 
