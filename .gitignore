@@ -24,6 +24,4 @@ run-data
 
 # Files from Forge MDK
 forge*changelog.txt
-run-data/
-/run-data/
 /Catnip-Forge-1.20.1-0.8.44-sources/
