@@ -1,6 +1,5 @@
 package bogdan.refueled.mixin.common.car;
 
-import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.gui.TruckGUI;
 import bogdan.refueled.common.network.*;
@@ -10,7 +9,6 @@ import bogdan.refueled.config.ServerConfig;
 import bogdan.refueled.mixin.common.accessor.IBiomeAccess;
 import bogdan.refueled.mixin.common.accessor.IEntityAccess;
 import bogdan.refueled.mixin.common.accessor.IHeightAccess;
-import bogdan.refueled.mixin.common.accessor.ILevelAccess;
 import com.dragn0007.dragnvehicles.registry.ItemRegistry;
 import com.dragn0007.dragnvehicles.vehicle.car.Car;
 import com.dragn0007.dragnvehicles.vehicle.classic.Classic;
@@ -25,7 +23,6 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -44,7 +41,6 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.DismountHelper;
-import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
@@ -52,7 +48,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -100,8 +95,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     /**
      * todo:
-     *     - !!! Add a gas station block and tile entity
-     *     - !! Add paint markings and item
+     *     - !!! Add paint markings and item
      *     - ! add lighting to vehicles
      *     - ! make the recipes conditional
      *     - ! add a crafting recipe allowing for energy/fluid transfer using the battery/canister
@@ -316,19 +310,22 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
         entity.setYRot(entity.getYRot() + refuel$deltaRotation);
         entity.setYHeadRot(entity.getYHeadRot() + this.refuel$deltaRotation);
-        //refuel$applyYawToEntity(entity);
     }
 
     @Override
     public void onPassengerTurned(@NotNull Entity entityToUpdate) {
-        refuel$applyYawToEntity(entityToUpdate);
+        if(ServerConfig.correctYaw.get())
+            refuel$applyYawToEntity(entityToUpdate);
     }
 
     @Unique
     public void refuel$applyYawToEntity(Entity entityToUpdate) {
         entityToUpdate.setYBodyRot(getYRot());
         float f = Mth.wrapDegrees(entityToUpdate.getYRot() - getYRot());
-        float f1 = Mth.clamp(f, -130.0F, 130.0F);
+        float f1;
+        if(ServerConfig.restrictYaw.get())
+            f1 = Mth.clamp(f, -135.0F, 135.0F);
+        else f1 = f;
         entityToUpdate.yRotO += f1 - f;
         entityToUpdate.setYRot(entityToUpdate.getYRot() + f1 - f);
         entityToUpdate.setYHeadRot(entityToUpdate.getYRot());
@@ -652,7 +649,7 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public float refuel$getRollResistance() {
-        return 0.02F;
+        return ServerConfig.rollResistance.get().floatValue();
     }
 
     @Unique
@@ -660,22 +657,22 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public void refuel$setForward(boolean forward) {
-        this.entityData.set(refuel$FORWARD, forward);
+        entityData.set(refuel$FORWARD, forward);
     }
 
     @Unique
     public void refuel$setBackward(boolean backward) {
-        this.entityData.set(refuel$BACKWARD, backward);
+        entityData.set(refuel$BACKWARD, backward);
     }
 
     @Unique
     public void refuel$setLeft(boolean left) {
-        this.entityData.set(refuel$LEFT, left);
+        entityData.set(refuel$LEFT, left);
     }
 
     @Unique
     public void refuel$setRight(boolean right) {
-        this.entityData.set(refuel$RIGHT, right);
+        entityData.set(refuel$RIGHT, right);
     }
 
     @Unique
@@ -695,13 +692,13 @@ public abstract class CarMixin extends Entity implements IVehicleAccess, MenuPro
 
     @Unique
     public boolean refuel$isRight() {
-        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && this.entityData.get(refuel$RIGHT);
+        return refuel$getDriver() != null && refuel$canPlayerDriveCar(refuel$getDriver()) && entityData.get(refuel$RIGHT);
     }
 
     @Unique
     private Player refuel$getDriver(){
         Entity firstPassenger = getFirstPassenger();
-        return firstPassenger instanceof Player ? (Player) firstPassenger : null;
+        return firstPassenger instanceof Player player ? player : null;
     }
 
     @Unique

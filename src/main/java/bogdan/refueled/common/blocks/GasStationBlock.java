@@ -35,7 +35,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.network.NetworkHooks;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -76,7 +75,7 @@ public class GasStationBlock extends Block implements EntityBlock {
         BlockPos clickedPos = pContext.getClickedPos();
         BlockPos adjustedPos = clickedPos.above();
         Level level = pContext.getLevel();
-        return level.getBlockState(adjustedPos).canBeReplaced(pContext) && level.getWorldBorder().isWithinBounds(adjustedPos) ? defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, pContext.getHorizontalDirection()) : null;
+        return level.getBlockState(adjustedPos).canBeReplaced(pContext) && level.getWorldBorder().isWithinBounds(adjustedPos) ? defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, pContext.getHorizontalDirection().getOpposite()) : null;
     }
 
     @Override

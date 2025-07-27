@@ -3,8 +3,6 @@ package bogdan.refueled.config;
 import bogdan.refueled.RefueledMain;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.projectile.Arrow;
-import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
@@ -50,6 +48,7 @@ public class ServerConfig {
     public static IntValue gasStationTransferMax;
 
     public static DoubleValue offroadSpeed;
+    public static DoubleValue rollResistance;
 
     public static ConfigValue<List<Number>> vehicleFuel;
     public static ConfigValue<List<Number>> vehicleBattery;
@@ -220,13 +219,17 @@ public class ServerConfig {
                 .comment("Defines how fast the gas station can transfer fuel in [mB/t]")
                 .defineInRange("gas_station_transfer", 100, 1, Integer.MAX_VALUE);
 
-        correctYaw = builder.
-                comment("Whether players inside the vehicles should have their head rotated along with the vehicle")
+        correctYaw = builder
+                .comment("Whether players inside the vehicles should have their head rotated along with the vehicle")
                 .define("correct_yaw", true);
 
-        restrictYaw = builder.
-                comment("Whether players should be able to turn their head the whole 360 degrees when in a vehicle")
+        restrictYaw = builder
+                .comment("Whether players should be able to turn their head the whole 360 degrees when in a vehicle")
                 .define("restrict_yaw", true);
+
+        rollResistance = builder
+                .comment("Vehicles' resistance to roll-overs, increasing it decreases vehicle maneuverability")
+                .defineInRange("roll_resist", 0.02, 0, Integer.MAX_VALUE);
 
         builder.push("road_blocks");
             roadBlocks = builder
@@ -395,10 +398,7 @@ public class ServerConfig {
     }
 
     public static float getFuelEfficiency(Fluid fluid){
-        if(fluid == Fluids.EMPTY)
-            return 0;
-
-        if (fluid != null) {
+        if (fluid != null && fluid != Fluids.EMPTY) {
             for(List<String> fuelValue : ServerConfig.fuelEff.get()){
                 if (fluid == ForgeRegistries.FLUIDS.getValue(new ResourceLocation(fuelValue.get(0)))) {
                     return Float.parseFloat(fuelValue.get(1));

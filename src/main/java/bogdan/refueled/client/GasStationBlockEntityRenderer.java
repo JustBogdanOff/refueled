@@ -46,19 +46,16 @@ public class GasStationBlockEntityRenderer implements BlockEntityRenderer<GasSta
         Font font = renderer.getFont();
 
         int textWidth = Math.max(font.width(fluid), font.width(amount));
-        float textScale = 0.36f / textWidth;
+        float textScale = 0.45f / textWidth;
         textScale = Math.min(textScale, 0.01f);
 
-        float posX = -(textScale * textWidth) / 2F;
-
-        poseStack.translate(posX, -0.86, -0.318);
-
+        poseStack.translate(-0.375, -0.875, -0.313);
         poseStack.scale(textScale, textScale, textScale);
 
         font.drawInBatch(fluid, 0F, 0F, 0xFFFFFF, false, poseStack.last().pose(), buffer, Font.DisplayMode.NORMAL, 0, packedLight);
         font.drawInBatch(amount, 0F, font.lineHeight, 0xFFFFFF, false, poseStack.last().pose(), buffer, Font.DisplayMode.NORMAL, 0, packedLight);
         poseStack.mulPose(Axis.YP.rotationDegrees(180));
-        poseStack.translate(-0.54 / textScale, 0, -0.636 / textScale);
+        poseStack.translate(-0.5625 / textScale, 0, -0.626 / textScale);
         font.drawInBatch(fluid, 0F, 0F, 0xFFFFFF, false, poseStack.last().pose(), buffer, Font.DisplayMode.NORMAL, 0, packedLight);
         font.drawInBatch(amount, 0F, font.lineHeight, 0xFFFFFF, false, poseStack.last().pose(), buffer, Font.DisplayMode.NORMAL, 0, packedLight);
         poseStack.popPose();

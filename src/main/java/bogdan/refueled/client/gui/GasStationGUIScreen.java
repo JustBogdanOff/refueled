@@ -46,8 +46,6 @@ public class GasStationGUIScreen extends AbstractContainerScreen<GasStationGUI> 
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.pose().translate(0, 0, 100);
-        guiGraphics.blit(GAS_STATION_TEXTURE, 151, 39, 176, 36, 18, 18); // todo?
         guiGraphics.drawString(font, gasStation.getFluidText(), 7, 10 + font.lineHeight, fontColor, false);
         guiGraphics.drawString(font, gasStation.getAmountText(), 7, 10 + font.lineHeight * 2, fontColor, false);
 
@@ -69,6 +67,12 @@ public class GasStationGUIScreen extends AbstractContainerScreen<GasStationGUI> 
 
         guiGraphics.drawString(font, gasStation.getBlockState().getBlock().getName().getVisualOrderText(), 7, 7, fontColor, false);
         guiGraphics.drawString(font, playerInv.getDisplayName().getVisualOrderText(), 7, 83, fontColor, false);
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0, 0, 333);
+        guiGraphics.blit(GAS_STATION_TEXTURE, 151, 39, 0, 176, 36, 18, 18, 256, 256);
+        guiGraphics.pose().popPose();
+
         renderTooltip(guiGraphics, mouseX - leftPos, mouseY - topPos);
     }
 

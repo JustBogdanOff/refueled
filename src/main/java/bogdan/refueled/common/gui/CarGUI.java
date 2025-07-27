@@ -4,7 +4,6 @@ import bogdan.refueled.RefueledRegistry;
 import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.config.ServerConfig;
 import bogdan.refueled.mixin.common.accessor.ILevelAccess;
-import com.dragn0007.dragnvehicles.vehicle.truck.Truck;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -46,6 +45,11 @@ public class CarGUI extends AbstractContainerMenu {
             @Override
             public boolean mayPlace(@NotNull ItemStack stack) {
                 return stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent() && !(stack.getItem() instanceof BucketItem);
+            }
+
+            @Override
+            public int getMaxStackSize() {
+                return 1;
             }
         });
         addSlot(new Slot(inventory, 1, 8, 84){

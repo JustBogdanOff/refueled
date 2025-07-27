@@ -52,6 +52,7 @@ public class RefueledRegistry {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, RefueledMain.MODID);
     public static final RegistryObject<Item> BATTERY = ITEMS.register("battery", BatteryItem::new);
     public static final RegistryObject<Item> CANISTER = ITEMS.register("canister", CanisterItem::new);
+    //public static final RegistryObject<Item> MARKING_PAINT = ITEMS.register("marking_painter", () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
     public static final RegistryObject<BlockItem> GAS_STATION_ITEM = ITEMS.register("gas_station", () -> new BlockItem(GAS_STATION_BLOCK.get(), new Item.Properties().stacksTo(64)));
 
 

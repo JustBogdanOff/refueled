@@ -1,5 +1,14 @@
++ Added the gas station
+| Allows for a indirect way of fueling vehicles (vehicle needs to be selected first in the gui)
+| Fluid transport compatible from the sides or bottom
++ By default, capacity is 20 buckets and transfer rate is 100mB/t
 - Vehicles' gravity reduced down to intended 0.08m/s, previously was 0.2m/s
 - Letting non-player entities drive no longer crashes the game
 - Crashing into a mob no longer crashes the game
 - Using the vehicle spawn eggs no longer crash the game
 - Added a `serverconfig` subtype to the `refueled` command, only supports modifying the fuel efficiencies config though
+- Vehicles now discard any non-fuel fluid left in the tank when loading into the world
++ Added `correct_yaw`, `restrict_yaw` and `roll_resist` into the serverconfig
+| `correct_yaw`, when disabled suppresses head rotation updates
+| `restrict_yaw`, if `correct_yaw` is enabled, restricts the passengers' head turning to 135 deg. to either side
++ `roll_resist` configures the rolling resistance for every vehicle, decreasing it results in higher turn rates

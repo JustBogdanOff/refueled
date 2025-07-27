@@ -1,37 +1,24 @@
 package bogdan.refueled.common.gui;
 
-import bogdan.refueled.RefueledMain;
 import bogdan.refueled.RefueledRegistry;
-import bogdan.refueled.common.accessors.IVehicleAccess;
 import bogdan.refueled.common.blocks.blockentities.GasStationBlockEntity;
 import bogdan.refueled.config.ServerConfig;
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.SimpleMenuProvider;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.sql.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 public class GasStationGUI extends AbstractContainerMenu {
 
@@ -61,7 +48,7 @@ public class GasStationGUI extends AbstractContainerMenu {
 
                 if (pStack.copyWithCount(1).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()){
                     if(gasStation.getCapability(ForgeCapabilities.FLUID_HANDLER).isPresent()){
-                        IFluidHandlerItem itemHandler = pStack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
+                        IFluidHandlerItem itemHandler = pStack.copyWithCount(1).getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).resolve().get();
                         IFluidHandler handler = gasStation.getCapability(ForgeCapabilities.FLUID_HANDLER).resolve().get();
                         FluidStack ourStored = handler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE),
                                 itemStored = itemHandler.drain(Integer.MAX_VALUE, IFluidHandler.FluidAction.SIMULATE);
@@ -118,7 +105,11 @@ public class GasStationGUI extends AbstractContainerMenu {
         }
 
         if(id >= 1 && id <= entitySlots.length){
-            gasStation.selected = player.level().getEntity(foundEntities.get(--id));
+            var selected = player.level().getEntity(foundEntities.get(--id));
+            if(gasStation.selected == selected)
+                gasStation.selected = null;
+            else
+                gasStation.selected = selected;
             return true;
         }
         return false;

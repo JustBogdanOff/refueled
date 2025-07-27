@@ -12,7 +12,6 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -33,25 +32,31 @@ import org.jetbrains.annotations.Nullable;
 import static bogdan.refueled.Utils.readInventory;
 import static bogdan.refueled.Utils.saveInventory;
 
-public class GasStationBlockEntity extends BlockEntity {
+public class GasStationBlockEntity extends BlockEntity{
     public GasStationBlockEntity(BlockPos pPos, BlockState pBlockState) {
         super(RefueledRegistry.GAS_STATION_BLOCK_ENTITY.get(), pPos, pBlockState);
         fuelingBox = getFuelingBox(pPos, pBlockState);
+
+        tank = new FluidTank(getFuelCapacity(), fs -> ServerConfig.getFuelEfficiency(fs.getFluid()) > 0){
+            @Override
+            protected void onContentsChanged() {
+                setChanged();
+            }
+        };
+        fluidHandler = LazyOptional.of(() -> tank);
+
+        inventory = new SimpleContainer(3);
+        itemHandler = LazyOptional.of(() -> new InvWrapper(inventory));
     }
 
-    private final FluidTank tank = new FluidTank(getFuelCapacity(), fluidStack -> ServerConfig.getFuelEfficiency(fluidStack.getFluid()) > 0){
-        @Override
-        protected void onContentsChanged() {
-            setChanged();
-        }
-    };
-    public final Container inventory = new SimpleContainer(3);
-    private final LazyOptional<IFluidHandler> fluidHandler = LazyOptional.of(() -> tank);
-    private final LazyOptional<IItemHandler> itemHandler = LazyOptional.of(() -> new InvWrapper(inventory));
+    public final FluidTank tank;
+    public final Container inventory;
+    private final LazyOptional<IFluidHandler> fluidHandler;
+    private final LazyOptional<IItemHandler> itemHandler;
 
     @Override
     public @NotNull <T> LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side) {
-        if(cap == ForgeCapabilities.FLUID_HANDLER)
+        if((side == null || side == Direction.DOWN || canReachHandler(getBlockState(), side)) && cap == ForgeCapabilities.FLUID_HANDLER)
             return fluidHandler.cast();
 
         if(cap == ForgeCapabilities.ITEM_HANDLER)
@@ -62,6 +67,17 @@ public class GasStationBlockEntity extends BlockEntity {
 
     public int getFuelCapacity(){
         return ServerConfig.gasStationMax.get();
+    }
+
+    private boolean canReachHandler(BlockState state, Direction side){
+        var facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+
+        if(facing == Direction.NORTH || facing == Direction.SOUTH)
+            return side == Direction.WEST || side == Direction.EAST;
+        else if(facing == Direction.EAST || facing == Direction.WEST)
+            return side == Direction.NORTH || side == Direction.SOUTH;
+
+        return false;
     }
 
     @Override
@@ -79,28 +95,33 @@ public class GasStationBlockEntity extends BlockEntity {
     }
 
     @Override
-    public CompoundTag getUpdateTag(){
+    public @NotNull CompoundTag getUpdateTag(){
         CompoundTag tag = new CompoundTag();
-
         tank.writeToNBT(tag);
-        saveInventory(tag, "inventory", inventory);
-
         return tag;
     }
 
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
-        // Will get tag from #getUpdateTag
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override
     public void handleUpdateTag(CompoundTag tag) {
         tank.readFromNBT(tag);
-        readInventory(tag, "inventory", inventory);
+        setChanged();
     }
 
-    public AABB fuelingBox;
+    @Override
+    public void setChanged() {
+        if(level != null){
+            setChanged(level, getBlockPos(), getBlockState());
+            if(!level.isClientSide)
+                level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 2);
+        }
+    }
+
+    public final AABB fuelingBox;
 
     public static AABB getFuelingBox(BlockPos pos, BlockState state){
         Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
@@ -149,113 +170,110 @@ public class GasStationBlockEntity extends BlockEntity {
             }
 
             if(!inv.getItem(1).isEmpty()) {
-                if (inv.getItem(2).isEmpty()) {
-                    ItemStack copy = inv.getItem(1).copy();
-                    if (copy.getCount() > 1) copy.setCount(1);
+                ItemStack copy = inv.getItem(1).copy();
+                if (copy.getCount() > 1) copy.setCount(1);
 
-                    copy.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
-                            itemHandler -> {
-                                FluidStack itemStored = itemHandler.drain(maxTransfer, IFluidHandler.FluidAction.SIMULATE);
+                copy.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
+                        itemHandler -> {
+                            FluidStack itemStored = itemHandler.drain(maxTransfer, IFluidHandler.FluidAction.SIMULATE);
 
-                                if (gasStation.fuelingItem) {
-                                    if (itemHandler.fill(ourStored, IFluidHandler.FluidAction.SIMULATE) > 0) {
-                                        var filled = itemHandler.fill(ourStored, IFluidHandler.FluidAction.EXECUTE);
-                                        handler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+                            if (gasStation.fuelingItem) {
+                                gasStation.drainingItem = false;
 
-                                        if (filled < maxTransfer || handler.drain(1, IFluidHandler.FluidAction.SIMULATE).isEmpty())
-                                            gasStation.fuelingItem = false;
+                                if (itemHandler.fill(ourStored, IFluidHandler.FluidAction.SIMULATE) > 0) {
+                                    var filled = itemHandler.fill(ourStored, IFluidHandler.FluidAction.EXECUTE);
+                                    handler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
 
-                                        if (!gasStation.fuelingItem) {
-                                            inv.setItem(1, ItemStack.EMPTY);
-                                            inv.setItem(2, copy);
-                                        }
-                                        else inv.setItem(1, copy);
-
-                                        gasStation.setChanged();
-                                    } else {
+                                    if (filled < maxTransfer || handler.drain(1, IFluidHandler.FluidAction.SIMULATE).isEmpty())
                                         gasStation.fuelingItem = false;
-                                        inv.setItem(1, ItemStack.EMPTY);
-                                        inv.setItem(2, copy); // todo
 
-                                        gasStation.setChanged();
-                                    }
-                                } else if (gasStation.drainingItem) {
-                                    if (handler.fill(itemStored, IFluidHandler.FluidAction.SIMULATE) > 0) {
-                                        var filled = handler.fill(itemStored, IFluidHandler.FluidAction.EXECUTE);
-                                        itemHandler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+                                    if (!gasStation.fuelingItem)
+                                        tryToOutput(copy, gasStation);
+                                    else inv.setItem(1, copy);
 
-                                        if (filled < maxTransfer || itemHandler.drain(1, IFluidHandler.FluidAction.SIMULATE).isEmpty())
-                                            gasStation.drainingItem = false;
-
-                                        if (!gasStation.drainingItem) {
-                                            inv.setItem(1, ItemStack.EMPTY);
-                                            inv.setItem(2, copy);
-                                        }
-                                        else inv.setItem(1, copy);
-
-                                        gasStation.setChanged();
-                                    }
-                                    else {
-                                        gasStation.drainingItem = false;
-                                        inv.setItem(1, ItemStack.EMPTY);
-                                        inv.setItem(2, copy);
-
-                                        gasStation.setChanged();
-                                    }
+                                    gasStation.setChanged();
+                                } else {
+                                    gasStation.fuelingItem = false;
+                                    tryToOutput(copy, gasStation);
+                                    gasStation.setChanged();
                                 }
-                            });
-                }
+                            } else if (gasStation.drainingItem) {
+                                if (handler.fill(itemStored, IFluidHandler.FluidAction.SIMULATE) > 0) {
+                                    var filled = handler.fill(itemStored, IFluidHandler.FluidAction.EXECUTE);
+                                    itemHandler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+
+                                    if (filled < maxTransfer || itemHandler.drain(1, IFluidHandler.FluidAction.SIMULATE).isEmpty())
+                                        gasStation.drainingItem = false;
+
+                                    if (!gasStation.drainingItem)
+                                        tryToOutput(copy, gasStation);
+                                    else inv.setItem(1, copy);
+
+                                    gasStation.setChanged();
+                                } else {
+                                    gasStation.drainingItem = false;
+                                    tryToOutput(copy, gasStation);
+                                    gasStation.setChanged();
+                                }
+                            } else {
+                                var output = inv.getItem(2);
+                                if(output.isEmpty() || output.copyWithCount(1).equals(copy, true)){
+                                    inv.setItem(1, ItemStack.EMPTY);
+
+                                    if(output.isEmpty()) inv.setItem(2, copy);
+                                    else output.grow(1);
+
+                                    gasStation.setChanged();
+                                }
+                            }
+                        });
             }
             else if(!inv.getItem(0).isEmpty()){
-                if(inv.getItem(2).isEmpty()){
-                    ItemStack original = inv.getItem(0), copy = original.copy();
-                    if(copy.getCount() > 1) copy.setCount(1);
+                ItemStack original = inv.getItem(0), copy = original.copy();
+                if(copy.getCount() > 1) copy.setCount(1);
 
-                    copy.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
-                            itemHandler -> {
-                                FluidStack itemStored = itemHandler.drain(maxTransfer, IFluidHandler.FluidAction.SIMULATE);
+                copy.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).ifPresent(
+                        itemHandler -> {
+                            FluidStack itemStored = itemHandler.drain(maxTransfer, IFluidHandler.FluidAction.SIMULATE);
 
-                                if(!itemStored.isEmpty()){
-                                    if(handler.fill(itemStored, IFluidHandler.FluidAction.SIMULATE) > 0){
-                                        var filled = handler.fill(itemStored, IFluidHandler.FluidAction.EXECUTE);
-                                        itemHandler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+                            if(!itemStored.isEmpty()){
+                                if(handler.fill(itemStored, IFluidHandler.FluidAction.SIMULATE) > 0){
+                                    var filled = handler.fill(itemStored, IFluidHandler.FluidAction.EXECUTE);
+                                    itemHandler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
 
-                                        if(original.getCount() > 1)
-                                            original.shrink(1);
-                                        else
-                                            inv.setItem(0, ItemStack.EMPTY);
+                                    if(original.getCount() > 1) original.shrink(1);
+                                    else inv.setItem(0, ItemStack.EMPTY);
 
-                                        if(filled == maxTransfer){
-                                            gasStation.drainingItem = true;
-                                            inv.setItem(1, copy);
-                                        }
-                                        else
-                                            inv.setItem(2, copy);
-                                        gasStation.setChanged();
-
+                                    if(filled == maxTransfer){
+                                        gasStation.drainingItem = true;
+                                        inv.setItem(1, copy);
                                     }
-                                } else if(!ourStored.isEmpty()){
-                                    if(itemHandler.fill(ourStored, IFluidHandler.FluidAction.SIMULATE) > 0){
-                                        var filled = itemHandler.fill(ourStored, IFluidHandler.FluidAction.EXECUTE);
-                                        handler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+                                    else
+                                        inv.setItem(2, copy);
 
-                                        if(original.getCount() > 1)
-                                            original.shrink(1);
-                                        else
-                                            inv.setItem(0, ItemStack.EMPTY);
+                                    gasStation.setChanged();
 
-                                        if(filled == maxTransfer){
-                                            gasStation.fuelingItem = true;
-                                            inv.setItem(1, copy);
-                                        }
-                                        else
-                                            inv.setItem(2, copy);
-                                        gasStation.setChanged();
-
-                                    }
                                 }
-                            });
-                }
+                            } else if(!ourStored.isEmpty()){
+                                if(itemHandler.fill(ourStored, IFluidHandler.FluidAction.SIMULATE) > 0){
+                                    var filled = itemHandler.fill(ourStored, IFluidHandler.FluidAction.EXECUTE);
+                                    handler.drain(filled, IFluidHandler.FluidAction.EXECUTE);
+
+                                    if(original.getCount() > 1) original.shrink(1);
+                                    else inv.setItem(0, ItemStack.EMPTY);
+
+                                    if(filled == maxTransfer){
+                                        gasStation.fuelingItem = true;
+                                        inv.setItem(1, copy);
+                                    }
+                                    else
+                                        inv.setItem(2, copy);
+
+                                    gasStation.setChanged();
+
+                                }
+                            }
+                        });
             }
             else {
                 gasStation.fuelingItem = false;
@@ -272,5 +290,21 @@ public class GasStationBlockEntity extends BlockEntity {
     public Component getAmountText(){
         if(tank.isEmpty()) return Component.literal("- mB");
         else return Component.translatable("tooltip.canister.amount", tank.getFluid().getAmount());
+    }
+
+    public static void tryToOutput(ItemStack copy, GasStationBlockEntity gasStation){
+        var output = gasStation.inventory.getItem(2);
+
+        if(output.isEmpty()){
+            gasStation.inventory.setItem(1, ItemStack.EMPTY);
+            gasStation.inventory.setItem(2, copy);
+        }
+        else if(output.copyWithCount(1).equals(copy, true)){
+            gasStation.inventory.setItem(1, ItemStack.EMPTY);
+            output.grow(1);
+        }
+        else gasStation.inventory.setItem(1, copy);
+
+        gasStation.setChanged();
     }
 }
